@@ -68,8 +68,11 @@ impl Default for Address {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Repeatability {
+    /// Shortest conversion time with the lowest repeatability.
     Low,
+    /// Balanced conversion time and repeatability.
     Medium,
+    /// Longest conversion time with the highest repeatability.
     High,
 }
 
@@ -114,9 +117,13 @@ impl Repeatability {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeriodicRate {
+    /// 0.5 measurements per second.
     Mps0_5,
+    /// 1 measurement per second.
     Mps1,
+    /// 2 measurements per second.
     Mps2,
+    /// 4 measurements per second.
     Mps4,
     /// 10 measurements per second.
     ///
@@ -153,7 +160,9 @@ impl PeriodicRate {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawMeasurement {
+    /// Raw temperature word from the sensor.
     pub temperature: u16,
+    /// Raw relative humidity word from the sensor.
     pub humidity: u16,
 }
 
@@ -229,7 +238,9 @@ impl RawMeasurement {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Measurement {
+    /// Temperature in degrees Celsius.
     pub temperature_celsius: f32,
+    /// Relative humidity in percent RH, clamped to `0.0..=100.0`.
     pub relative_humidity: f32,
 }
 
@@ -251,36 +262,43 @@ pub struct FixedPointMeasurement {
 pub struct Status(pub u16);
 
 impl Status {
+    /// `true` when the alert pin condition is currently active.
     #[must_use]
     pub const fn alert_pending(self) -> bool {
         self.0 & (1 << 15) != 0
     }
 
+    /// `true` when the internal heater is enabled.
     #[must_use]
     pub const fn heater_enabled(self) -> bool {
         self.0 & (1 << 13) != 0
     }
 
+    /// `true` when the humidity tracking alert condition is active.
     #[must_use]
     pub const fn humidity_alert(self) -> bool {
         self.0 & (1 << 11) != 0
     }
 
+    /// `true` when the temperature tracking alert condition is active.
     #[must_use]
     pub const fn temperature_alert(self) -> bool {
         self.0 & (1 << 10) != 0
     }
 
+    /// `true` when the sensor detected a reset since the flag was last cleared.
     #[must_use]
     pub const fn reset_detected(self) -> bool {
         self.0 & (1 << 4) != 0
     }
 
+    /// `true` when the last command was not processed successfully.
     #[must_use]
     pub const fn command_failed(self) -> bool {
         self.0 & (1 << 1) != 0
     }
 
+    /// `true` when the last write command failed its checksum validation.
     #[must_use]
     pub const fn write_checksum_failed(self) -> bool {
         self.0 & 1 != 0
@@ -296,8 +314,11 @@ pub enum Error<I2cError> {
     I2c(I2cError),
     /// CRC byte did not match the preceding data word.
     Crc {
+        /// Which 16-bit word failed CRC validation.
         word: DataWord,
+        /// CRC value computed from the received data bytes.
         expected: u8,
+        /// CRC byte returned by the sensor.
         actual: u8,
     },
 }
@@ -326,12 +347,32 @@ where
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DataWord {
+    /// The temperature data word.
     Temperature,
+    /// The relative humidity data word.
     Humidity,
+    /// The status register word.
     Status,
 }
 
 /// Sensirion SHT3x-DIS embedded-hal 1.0 I2C driver.
+///
+/// Most applications should start with [`Self::measure`] for one-shot readings
+/// or [`Self::start_periodic_and_wait`] plus [`Self::fetch`] for periodic
+/// acquisition.
+///
+/// Use the more specialized methods only when you need a specific tradeoff:
+///
+/// - [`Self::measure_raw`] if you want raw `u16` words or integer-only
+///   conversion via [`RawMeasurement::to_fixed_point`].
+/// - [`Self::measure_temperature`] or [`Self::measure_temperature_millicelsius`]
+///   if humidity is not needed and you want a shorter read transaction.
+/// - `*_low_voltage` variants when VDD is below 2.4 V and the longer datasheet
+///   conversion delays must be used.
+/// - `*_with_clock_stretching` variants only when the I2C controller supports
+///   sensor-driven clock stretching.
+/// - `_and_wait` configuration methods when you want the driver to enforce the
+///   datasheet's required 1 ms command gap.
 #[derive(Debug)]
 pub struct Sht3x<I2C> {
     i2c: I2C,

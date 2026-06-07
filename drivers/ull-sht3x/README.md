@@ -50,6 +50,29 @@ pull-up resistors and timing configuration for your target platform.
 Use `Address::DEFAULT` or `Address::ALTERNATE` for the two standard address
 strap options. For a dynamic 7-bit address, use `Address::custom(address)`.
 
+## Choosing A Method
+
+The driver exposes several measurement entry points because the SHT3x supports
+different timing and transfer modes. The intended defaults are:
+
+- Use `measure` for most single-shot reads.
+- Use `measure_raw` when you want raw `u16` values or integer-only conversion.
+- Use `measure_temperature` or `measure_temperature_millicelsius` when humidity
+  is not needed.
+- Use `measure_low_voltage` or `measure_raw_low_voltage` only when VDD is below
+  2.4 V.
+- Use `measure_with_clock_stretching` only if your I2C peripheral supports
+  clock stretching.
+
+For periodic acquisition, the usual flow is `start_periodic_and_wait`, then
+`fetch` or `fetch_raw` whenever you want the latest sample, then
+`stop_periodic` before switching back to single-shot commands.
+
+Methods with `_and_wait` in the name are convenience helpers for commands that
+need the datasheet's 1 ms post-command gap before the next command can be sent.
+Use the shorter variants without `_and_wait` only when your application already
+enforces that timing.
+
 ## Fixed-Point Readings
 
 `Measurement` uses `f32`, which is convenient on targets with hardware floating
