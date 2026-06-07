@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["drivers/ull-sht3x"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ullnorse/ull-drivers-rs"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
