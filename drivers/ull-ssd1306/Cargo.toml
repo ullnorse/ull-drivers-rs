@@ -1,0 +1,26 @@
+[package]
+name = "ull-ssd1306"
+version = "0.1.0"
+edition.workspace = true
+description = "no_std embedded-hal 1.0 SSD1306 display driver with optional embedded-graphics-core support"
+license.workspace = true
+repository.workspace = true
+keywords = ["ssd1306", "oled", "embedded-hal", "embedded-graphics"]
+categories = ["embedded", "hardware-support", "no-std"]
+
+[lints]
+workspace = true
+
+[dependencies]
+ defmt = { version = "1.0", optional = true }
+ embedded-graphics-core = { version = "0.4", optional = true }
+ embedded-hal = "1.0.0"
+ embedded-hal-async = { version = "1.0.0", optional = true }
+ serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+
+[features]
+ default = []
+ async = ["dep:embedded-hal-async"]
+ defmt = ["dep:defmt"]
+ graphics = ["dep:embedded-graphics-core"]
+ serde = ["dep:serde"]
