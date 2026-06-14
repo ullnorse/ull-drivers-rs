@@ -150,7 +150,7 @@ impl PeriodicRate {
             (Self::Mps4, Repeatability::Low) => 0x2329,
             (Self::Mps10, Repeatability::High) => 0x2737,
             (Self::Mps10, Repeatability::Medium) => 0x2721,
-            (Self::Mps10, Repeatability::Low) => 0x272A,
+            (Self::Mps10, Repeatability::Low) => 0x273A,
         }
     }
 }
@@ -1420,6 +1420,31 @@ mod tests {
             .unwrap();
 
         assert_eq!(delay.delayed_ms, Vec::from([7]));
+    }
+
+    #[test]
+    fn periodic_commands_match_datasheet_table() {
+        let expected = [
+            (PeriodicRate::Mps0_5, Repeatability::High, 0x2032),
+            (PeriodicRate::Mps0_5, Repeatability::Medium, 0x2024),
+            (PeriodicRate::Mps0_5, Repeatability::Low, 0x202F),
+            (PeriodicRate::Mps1, Repeatability::High, 0x2130),
+            (PeriodicRate::Mps1, Repeatability::Medium, 0x2126),
+            (PeriodicRate::Mps1, Repeatability::Low, 0x212D),
+            (PeriodicRate::Mps2, Repeatability::High, 0x2236),
+            (PeriodicRate::Mps2, Repeatability::Medium, 0x2220),
+            (PeriodicRate::Mps2, Repeatability::Low, 0x222B),
+            (PeriodicRate::Mps4, Repeatability::High, 0x2334),
+            (PeriodicRate::Mps4, Repeatability::Medium, 0x2322),
+            (PeriodicRate::Mps4, Repeatability::Low, 0x2329),
+            (PeriodicRate::Mps10, Repeatability::High, 0x2737),
+            (PeriodicRate::Mps10, Repeatability::Medium, 0x2721),
+            (PeriodicRate::Mps10, Repeatability::Low, 0x273A),
+        ];
+
+        for (rate, repeatability, command) in expected {
+            assert_eq!(rate.command(repeatability), command);
+        }
     }
 
     #[test]
