@@ -110,7 +110,7 @@ measurement methods yield during conversion delays instead of blocking the
 executor task.
 
 ```toml
-ull-sht3x = { path = "drivers/ull-sht3x", features = ["async"] }
+ull-sht3x = { version = "0.1.0", features = ["async"] }
 ```
 
 ```rust,ignore
@@ -144,7 +144,7 @@ read-abort allowance and reduces I2C bus time when humidity is not needed.
 Both features are disabled by default:
 
 ```toml
-ull-sht3x = { path = "drivers/ull-sht3x", features = ["async", "defmt", "serde"] }
+ull-sht3x = { version = "0.1.0", features = ["async", "defmt", "serde"] }
 ```
 
 - `async`: enables async methods using `embedded-hal-async` 1.0.

@@ -52,7 +52,7 @@ Enable the `graphics` feature to implement `DrawTarget<Color = BinaryColor>` on
 buffered mode instances.
 
 ```toml
-ull-ssd1306 = { path = "drivers/ull-ssd1306", features = ["graphics"] }
+ull-ssd1306 = { version = "0.1.0", features = ["graphics"] }
 ```
 
 Drawing only updates the local framebuffer. Call `flush()` to send pixels to
@@ -64,7 +64,7 @@ you want to reduce I2C traffic.
 Enable the `async` feature to use `embedded-hal-async` 1.0 traits.
 
 ```toml
-ull-ssd1306 = { path = "drivers/ull-ssd1306", features = ["async", "graphics"] }
+ull-ssd1306 = { version = "0.1.0", features = ["async", "graphics"] }
 ```
 
 Async methods mirror the blocking API with `_async` suffixes, for example

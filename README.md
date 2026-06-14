@@ -22,7 +22,8 @@ crate is meant to be small, understandable, tested, and based on
 ```text
 ull-drivers-rs/
 ├── drivers/
-│   └── ull-sht3x/
+│   ├── ull-sht3x/
+│   └── ull-ssd1306/
 ├── Cargo.toml
 └── LICENSE
 ```
@@ -30,6 +31,7 @@ ull-drivers-rs/
 ## Crates
 
 - `drivers/ull-sht3x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT3x-DIS humidity and temperature sensors.
+- `drivers/ull-ssd1306`: `embedded-hal` 1.0 SSD1306 display driver with optional `embedded-graphics-core` support.
 
 ## Workspace Notes
 
@@ -41,5 +43,5 @@ ull-drivers-rs/
 
 ```bash
 cargo check --workspace
-cargo test -p ull-sht3x
+cargo test --all-targets --all-features
 ```
