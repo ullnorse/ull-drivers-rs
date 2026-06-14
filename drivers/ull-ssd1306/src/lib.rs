@@ -47,10 +47,10 @@ impl Address {
     /// `0x3D`, the alternate SSD1306 I2C address.
     pub const ALTERNATE: Self = Self(0x3D);
 
-    /// Creates a custom 7-bit I2C address.
+    /// Creates an address from a supported 7-bit display address.
     #[must_use]
     pub const fn custom(address: u8) -> Option<Self> {
-        if address <= 0x7F {
+        if address == Self::DEFAULT.0 || address == Self::ALTERNATE.0 {
             Some(Self(address))
         } else {
             None
@@ -2081,10 +2081,13 @@ mod tests {
     }
 
     #[test]
-    fn custom_address_rejects_invalid_8bit_values() {
-        assert_eq!(Address::custom(0x7F), Some(Address(0x7F)));
-        assert_eq!(Address::custom(0x80), None);
-        assert_eq!(Address::custom(0xFF), None);
+    fn custom_address_accepts_only_supported_display_addresses() {
+        assert_eq!(Address::custom(0x3C), Some(Address::DEFAULT));
+        assert_eq!(Address::custom(0x3D), Some(Address::ALTERNATE));
+        assert_eq!(Address::custom(0x00), None);
+        assert_eq!(Address::custom(0x3B), None);
+        assert_eq!(Address::custom(0x3E), None);
+        assert_eq!(Address::custom(0x7F), None);
     }
 
     #[test]
