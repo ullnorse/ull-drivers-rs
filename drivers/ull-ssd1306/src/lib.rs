@@ -557,6 +557,9 @@ where
     }
 }
 
+type StateChangeResult<NEXT, CURRENT, BusError> =
+    core::result::Result<NEXT, StateChangeError<CURRENT, BusError>>;
+
 /// Marker type for the raw command mode.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct RawMode;
@@ -1369,10 +1372,7 @@ where
     /// Activates the previously configured hardware scroll operation.
     pub fn start_scroll(
         mut self,
-    ) -> core::result::Result<
-        Ssd1306<DI, SIZE, MODE, ScrollActive>,
-        StateChangeError<Self, DI::Error>,
-    > {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollActive>, Self, DI::Error> {
         if let Err(error) = self.send_command(0x2F) {
             return Err(StateChangeError::new(self, error));
         }
@@ -1396,10 +1396,7 @@ where
     /// Deactivates hardware scrolling.
     pub fn stop_scroll(
         mut self,
-    ) -> core::result::Result<
-        Ssd1306<DI, SIZE, MODE, ScrollInactive>,
-        StateChangeError<Self, DI::Error>,
-    > {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollInactive>, Self, DI::Error> {
         if let Err(error) = self.send_command(0x2E) {
             return Err(StateChangeError::new(self, error));
         }
@@ -1674,10 +1671,7 @@ where
     /// Async version of [`Self::start_scroll`].
     pub async fn start_scroll_async(
         mut self,
-    ) -> core::result::Result<
-        Ssd1306<DI, SIZE, MODE, ScrollActive>,
-        StateChangeError<Self, DI::Error>,
-    > {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollActive>, Self, DI::Error> {
         if let Err(error) = self.send_command_async(0x2F).await {
             return Err(StateChangeError::new(self, error));
         }
@@ -1702,10 +1696,7 @@ where
     /// Async version of [`Self::stop_scroll`].
     pub async fn stop_scroll_async(
         mut self,
-    ) -> core::result::Result<
-        Ssd1306<DI, SIZE, MODE, ScrollInactive>,
-        StateChangeError<Self, DI::Error>,
-    > {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollInactive>, Self, DI::Error> {
         if let Err(error) = self.send_command_async(0x2E).await {
             return Err(StateChangeError::new(self, error));
         }
@@ -1888,8 +1879,6 @@ mod tests {
     #[cfg(feature = "async")]
     use std::pin::pin;
     use std::vec::Vec;
-    #[cfg(feature = "async")]
-    use std::{sync::Arc, task::Wake};
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     struct MockI2cError;
@@ -2015,23 +2004,9 @@ mod tests {
     }
 
     #[cfg(feature = "async")]
-    #[derive(Default)]
-    struct NoopWake;
-
-    #[cfg(feature = "async")]
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    #[cfg(feature = "async")]
-    fn noop_waker() -> Waker {
-        Waker::from(Arc::new(NoopWake))
-    }
-
-    #[cfg(feature = "async")]
     fn block_on<F: Future>(future: F) -> F::Output {
-        let waker = noop_waker();
-        let mut context = Context::from_waker(&waker);
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
         let mut future = pin!(future);
 
         loop {
