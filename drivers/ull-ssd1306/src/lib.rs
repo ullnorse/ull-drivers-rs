@@ -208,6 +208,38 @@ where
     }
 }
 
+/// Raw SSD1306 display-offset register value in COM lines.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DisplayOffset {
+    value: u8,
+}
+
+impl DisplayOffset {
+    /// Creates a display-offset value in the inclusive range `0..=63`.
+    #[must_use]
+    pub const fn new(offset: u8) -> Option<Self> {
+        if offset <= 63 {
+            Some(Self { value: offset })
+        } else {
+            None
+        }
+    }
+
+    /// Returns offset 0.
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self { value: 0 }
+    }
+
+    /// Returns the raw display-offset register value.
+    #[must_use]
+    pub const fn as_u8(self) -> u8 {
+        self.value
+    }
+}
+
 /// Number of panel rows for the selected display size.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -1218,13 +1250,13 @@ where
         self.send_commands(&[0x81, contrast])
     }
 
-    /// Sets the display start line register (`40h..=7Fh`).
+    /// Sets the display start line within the configured panel line range (`40h..=7Fh`).
     pub fn set_display_start_line(&mut self, line: DisplayLine<SIZE>) -> Result<(), DI::Error> {
         self.send_command(0x40 | line.as_u8())
     }
 
     /// Sets the vertical display offset (`D3h`).
-    pub fn set_display_offset(&mut self, offset: DisplayLine<SIZE>) -> Result<(), DI::Error> {
+    pub fn set_display_offset(&mut self, offset: DisplayOffset) -> Result<(), DI::Error> {
         self.send_commands(&[0xD3, offset.as_u8()])
     }
 
@@ -1552,7 +1584,7 @@ where
     /// Async version of [`Self::set_display_offset`].
     pub async fn set_display_offset_async(
         &mut self,
-        offset: DisplayLine<SIZE>,
+        offset: DisplayOffset,
     ) -> Result<(), DI::Error> {
         self.send_commands_async(&[0xD3, offset.as_u8()]).await
     }
@@ -2081,6 +2113,8 @@ mod tests {
             15
         );
         assert_eq!(DisplayLine::<DisplaySize96x16>::new(16), None);
+        assert_eq!(DisplayOffset::new(63).unwrap().as_u8(), 63);
+        assert_eq!(DisplayOffset::new(64), None);
     }
 
     #[test]
@@ -2331,13 +2365,25 @@ mod tests {
             .set_display_start_line(DisplayLine::<DisplaySize128x64>::new(12).unwrap())
             .unwrap();
         display
-            .set_display_offset(DisplayLine::<DisplaySize128x64>::new(7).unwrap())
+            .set_display_offset(DisplayOffset::new(7).unwrap())
             .unwrap();
 
         let i2c = display.release();
 
         assert_eq!(i2c.writes[0].bytes, Vec::from([0x00, 0x4C]));
         assert_eq!(i2c.writes[1].bytes, Vec::from([0x00, 0xD3, 0x07]));
+    }
+
+    #[test]
+    fn display_offset_uses_full_controller_range() {
+        let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x32, Rotation::Rotate0);
+
+        display
+            .set_display_offset(DisplayOffset::new(40).unwrap())
+            .unwrap();
+
+        let i2c = display.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x00, 0xD3, 0x28]));
     }
 
     #[test]

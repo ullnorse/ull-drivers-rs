@@ -83,6 +83,8 @@ Async methods mirror the blocking API with `_async` suffixes, for example
   style `RES#` pulse for boards that expose the hardware reset pin.
 - The framebuffer is owned by buffered mode. Raw mode has no pixel storage and
   exposes direct command and RAM-data operations.
+- `DisplayLine<SIZE>` models active panel lines, while `DisplayOffset` models
+  the raw SSD1306 `D3h` controller offset range `0..=63`.
 - `Orientation` exposes the full hardware layout matrix, while `Rotation`
   remains available as the simple `0` and `180` degree convenience API.
 - `start_scroll()` returns a scroll-active typestate and `stop_scroll()` returns
