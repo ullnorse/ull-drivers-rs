@@ -981,7 +981,9 @@ where
     /// failures are still returned as [`Error::I2c`].
     pub async fn fetch_raw_async(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.write_command_async(CMD_FETCH_DATA).await?;
-        self.read_raw_measurement_async().await.map_err(map_fetch_error)
+        self.read_raw_measurement_async()
+            .await
+            .map_err(map_fetch_error)
     }
 
     /// Async version of [`Self::stop_periodic`].
@@ -1629,8 +1631,7 @@ mod tests {
 
     #[test]
     fn fetch_maps_not_ready_nack() {
-        let i2c =
-            MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+        let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
         let mut sensor = Sht3x::new(i2c);
 
         assert_eq!(sensor.fetch_raw(), Err(Error::NotReady));
@@ -1775,8 +1776,7 @@ mod tests {
     #[cfg(feature = "async")]
     #[test]
     fn async_fetch_maps_not_ready_nack() {
-        let i2c =
-            MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+        let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
         let mut sensor = Sht3x::new(i2c);
 
         assert_eq!(block_on(sensor.fetch_raw_async()), Err(Error::NotReady));
