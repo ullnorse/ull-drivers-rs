@@ -40,10 +40,10 @@ impl Address {
     /// `0x45`, selected when ADDR is tied high.
     pub const ALTERNATE: Self = Self(ALTERNATE_ADDRESS);
 
-    /// Creates a custom 7-bit I2C address.
+    /// Creates an address from a supported 7-bit sensor address.
     #[must_use]
     pub const fn custom(address: u8) -> Option<Self> {
-        if address <= 0x7F {
+        if address == DEFAULT_ADDRESS || address == ALTERNATE_ADDRESS {
             Some(Self(address))
         } else {
             None
@@ -1518,10 +1518,13 @@ mod tests {
     }
 
     #[test]
-    fn custom_address_rejects_invalid_8bit_values() {
-        assert_eq!(Address::custom(0x7F), Some(Address(0x7F)));
-        assert_eq!(Address::custom(0x80), None);
-        assert_eq!(Address::custom(0xFF), None);
+    fn custom_address_accepts_only_supported_sensor_addresses() {
+        assert_eq!(Address::custom(0x44), Some(Address::DEFAULT));
+        assert_eq!(Address::custom(0x45), Some(Address::ALTERNATE));
+        assert_eq!(Address::custom(0x00), None);
+        assert_eq!(Address::custom(0x43), None);
+        assert_eq!(Address::custom(0x46), None);
+        assert_eq!(Address::custom(0x7F), None);
     }
 
     #[test]

@@ -48,7 +48,8 @@ tied high. As with other I2C devices, make sure your bus has the required
 pull-up resistors and timing configuration for your target platform.
 
 Use `Address::DEFAULT` or `Address::ALTERNATE` for the two standard address
-strap options. For a dynamic 7-bit address, use `Address::custom(address)`.
+strap options. `Address::custom(address)` is available when you need to parse a
+runtime value, but it only accepts those two supported 7-bit addresses.
 
 ## Choosing A Method
 
