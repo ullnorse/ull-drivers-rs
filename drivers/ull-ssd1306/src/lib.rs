@@ -751,8 +751,9 @@ where
 
     /// Updates the full display orientation.
     pub fn set_orientation(&mut self, orientation: Orientation) -> Result<(), DI::Error> {
+        self.apply_orientation(orientation)?;
         self.config.orientation = orientation;
-        self.apply_orientation(orientation)
+        Ok(())
     }
 
     /// Updates only the segment remap configuration.
@@ -804,8 +805,9 @@ where
         &mut self,
         orientation: Orientation,
     ) -> Result<(), DI::Error> {
+        self.apply_orientation_async(orientation).await?;
         self.config.orientation = orientation;
-        self.apply_orientation_async(orientation).await
+        Ok(())
     }
 
     /// Async version of [`Self::set_segment_remap`].
@@ -968,8 +970,9 @@ where
 
     /// Updates the full display orientation.
     pub fn set_orientation(&mut self, orientation: Orientation) -> Result<(), DI::Error> {
+        self.apply_orientation(orientation)?;
         self.config.orientation = orientation;
-        self.apply_orientation(orientation)
+        Ok(())
     }
 
     /// Updates only the segment remap configuration.
@@ -1063,8 +1066,9 @@ where
         &mut self,
         orientation: Orientation,
     ) -> Result<(), DI::Error> {
+        self.apply_orientation_async(orientation).await?;
         self.config.orientation = orientation;
-        self.apply_orientation_async(orientation).await
+        Ok(())
     }
 
     /// Async version of [`Self::set_segment_remap`].
@@ -1123,8 +1127,6 @@ where
 
     /// Initializes the controller with an explicit configuration.
     pub fn init_with_config(&mut self, config: Config) -> Result<(), DI::Error> {
-        self.config = config;
-
         self.send_commands(&[
             0xAE,
             0xD5,
@@ -1157,7 +1159,10 @@ where
             0xA6,
             0x2E,
             0xAF,
-        ])
+        ])?;
+
+        self.config = config;
+        Ok(())
     }
 
     /// Pulses the hardware reset pin, waits the datasheet minimum delay, then
@@ -1445,8 +1450,6 @@ where
 
     /// Async version of [`Self::init_with_config`].
     pub async fn init_with_config_async(&mut self, config: Config) -> Result<(), DI::Error> {
-        self.config = config;
-
         self.send_commands_async(&[
             0xAE,
             0xD5,
@@ -1481,7 +1484,10 @@ where
             0x2E,
             0xAF,
         ])
-        .await
+        .await?;
+
+        self.config = config;
+        Ok(())
     }
 
     /// Async version of [`Self::init_with_config_and_reset`].
@@ -2521,6 +2527,45 @@ mod tests {
     }
 
     #[test]
+    fn set_orientation_failure_preserves_previous_orientation() {
+        let mut display =
+            Ssd1306::new(MockI2c::fail_after(0), DisplaySize128x64, Rotation::Rotate0);
+
+        assert_eq!(display.orientation(), Orientation::ROTATE_0);
+        assert_eq!(
+            display.set_orientation(Orientation::ROTATE_180),
+            Err(Error::Bus(MockI2cError))
+        );
+        assert_eq!(display.orientation(), Orientation::ROTATE_0);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+    }
+
+    #[test]
+    fn init_with_config_failure_preserves_previous_config() {
+        let mut display =
+            Ssd1306::new(MockI2c::fail_after(2), DisplaySize128x64, Rotation::Rotate0);
+
+        let initial_orientation = display.orientation();
+        assert_eq!(initial_orientation, Orientation::ROTATE_0);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+
+        assert_eq!(
+            display.init_with_config(Config {
+                orientation: Orientation::ROTATE_180,
+                power_source: PowerSource::External,
+                contrast: 0xCF,
+            }),
+            Err(Error::Bus(MockI2cError))
+        );
+
+        assert_eq!(display.orientation(), initial_orientation);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+
+        let i2c = display.release();
+        assert_eq!(i2c.writes.len(), 2);
+    }
+
+    #[test]
     fn clear_zeros_buffer() {
         let mut display = Ssd1306::new(MockI2c::new(), DisplaySize96x16, Rotation::Rotate0)
             .into_buffered_graphics_mode();
@@ -2596,6 +2641,45 @@ mod tests {
         assert_eq!(reset.states, Vec::from([false, true]));
         assert_eq!(delay.calls_us, Vec::from([3, 3]));
         assert_eq!(i2c.writes[0].bytes[1], 0xAE);
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn set_orientation_async_failure_preserves_previous_orientation() {
+        let mut display =
+            Ssd1306::new(MockI2c::fail_after(0), DisplaySize128x64, Rotation::Rotate0);
+
+        assert_eq!(display.orientation(), Orientation::ROTATE_0);
+
+        let result = block_on(display.set_orientation_async(Orientation::ROTATE_180));
+
+        assert_eq!(result, Err(Error::Bus(MockI2cError)));
+        assert_eq!(display.orientation(), Orientation::ROTATE_0);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn init_with_config_async_failure_preserves_previous_config() {
+        let mut display =
+            Ssd1306::new(MockI2c::fail_after(2), DisplaySize128x64, Rotation::Rotate0);
+
+        let initial_orientation = display.orientation();
+        assert_eq!(initial_orientation, Orientation::ROTATE_0);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+
+        let result = block_on(display.init_with_config_async(Config {
+            orientation: Orientation::ROTATE_180,
+            power_source: PowerSource::External,
+            contrast: 0xCF,
+        }));
+
+        assert_eq!(result, Err(Error::Bus(MockI2cError)));
+        assert_eq!(display.orientation(), initial_orientation);
+        assert_eq!(display.rotation(), Some(Rotation::Rotate0));
+
+        let i2c = display.release();
+        assert_eq!(i2c.writes.len(), 2);
     }
 
     fn assert_send<T: Send>() {}
