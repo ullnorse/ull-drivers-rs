@@ -153,7 +153,7 @@ impl PeriodicRate {
             (Self::Mps4, Repeatability::Low) => 0x2329,
             (Self::Mps10, Repeatability::High) => 0x2737,
             (Self::Mps10, Repeatability::Medium) => 0x2721,
-            (Self::Mps10, Repeatability::Low) => 0x273A,
+            (Self::Mps10, Repeatability::Low) => 0x272A,
         }
     }
 }
@@ -1577,7 +1577,7 @@ mod tests {
             (PeriodicRate::Mps4, Repeatability::Low, 0x2329),
             (PeriodicRate::Mps10, Repeatability::High, 0x2737),
             (PeriodicRate::Mps10, Repeatability::Medium, 0x2721),
-            (PeriodicRate::Mps10, Repeatability::Low, 0x273A),
+            (PeriodicRate::Mps10, Repeatability::Low, 0x272A),
         ];
 
         for (rate, repeatability, command) in expected {
