@@ -315,6 +315,8 @@ impl Status {
 pub enum Error<I2cError> {
     /// I2C bus error from the HAL.
     I2c(I2cError),
+    /// Periodic fetch was attempted before a measurement was ready.
+    NotReady,
     /// CRC byte did not match the preceding data word.
     Crc {
         /// Which 16-bit word failed CRC validation.
@@ -333,6 +335,7 @@ where
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::I2c(error) => write!(f, "I2C bus error: {error:?}"),
+            Self::NotReady => f.write_str("measurement not ready"),
             Self::Crc {
                 word,
                 expected,
@@ -604,9 +607,8 @@ where
     /// Fetches one data pair from periodic acquisition.
     ///
     /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK. `embedded-hal` exposes that as `Error::I2c(_)`, so an
-    /// I2C error from this method can mean "data not ready" rather than a
-    /// wiring or bus fault.
+    /// header with NACK and this returns [`Error::NotReady`]. Other I2C
+    /// failures are still returned as [`Error::I2c`].
     pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
         self.fetch_raw().map(RawMeasurement::to_measurement)
     }
@@ -614,12 +616,11 @@ where
     /// Fetches one raw data pair from periodic acquisition.
     ///
     /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK. `embedded-hal` exposes that as `Error::I2c(_)`, so an
-    /// I2C error from this method can mean "data not ready" rather than a
-    /// wiring or bus fault.
+    /// header with NACK and this returns [`Error::NotReady`]. Other I2C
+    /// failures are still returned as [`Error::I2c`].
     pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.write_command(CMD_FETCH_DATA)?;
-        self.read_raw_measurement()
+        self.read_raw_measurement().map_err(map_fetch_error)
     }
 
     /// Stops periodic acquisition.
@@ -965,7 +966,8 @@ where
     /// Async version of [`Self::fetch`].
     ///
     /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK. `embedded-hal-async` exposes that as `Error::I2c(_)`.
+    /// header with NACK and this returns [`Error::NotReady`]. Other I2C
+    /// failures are still returned as [`Error::I2c`].
     pub async fn fetch_async(&mut self) -> Result<Measurement, I2C::Error> {
         self.fetch_raw_async()
             .await
@@ -975,10 +977,11 @@ where
     /// Async version of [`Self::fetch_raw`].
     ///
     /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK. `embedded-hal-async` exposes that as `Error::I2c(_)`.
+    /// header with NACK and this returns [`Error::NotReady`]. Other I2C
+    /// failures are still returned as [`Error::I2c`].
     pub async fn fetch_raw_async(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.write_command_async(CMD_FETCH_DATA).await?;
-        self.read_raw_measurement_async().await
+        self.read_raw_measurement_async().await.map_err(map_fetch_error)
     }
 
     /// Async version of [`Self::stop_periodic`].
@@ -1147,6 +1150,23 @@ fn parse_raw_measurement<E>(data: [u8; 6]) -> Result<RawMeasurement, E> {
     })
 }
 
+fn map_fetch_error<I2cError>(error: Error<I2cError>) -> Error<I2cError>
+where
+    I2cError: embedded_hal::i2c::Error,
+{
+    match error {
+        Error::I2c(i2c_error)
+            if matches!(
+                i2c_error.kind(),
+                embedded_hal::i2c::ErrorKind::NoAcknowledge(_)
+            ) =>
+        {
+            Error::NotReady
+        }
+        other => other,
+    }
+}
+
 fn parse_raw_temperature<E>(data: [u8; 3]) -> Result<u16, E> {
     check_crc(DataWord::Temperature, data[0], data[1], data[2])?;
     Ok(u16::from_be_bytes([data[0], data[1]]))
@@ -1215,7 +1235,7 @@ mod tests {
     };
     use embedded_hal::{
         delay::DelayNs,
-        i2c::{ErrorKind, ErrorType, Operation},
+        i2c::{ErrorKind, ErrorType, NoAcknowledgeSource, Operation},
     };
     #[cfg(feature = "async")]
     use std::pin::pin;
@@ -1227,6 +1247,10 @@ mod tests {
     impl MockI2cError {
         const fn other() -> Self {
             Self(ErrorKind::Other)
+        }
+
+        const fn no_ack_data() -> Self {
+            Self(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data))
         }
     }
 
@@ -1604,14 +1628,23 @@ mod tests {
     }
 
     #[test]
-    fn fetch_propagates_not_ready_i2c_error() {
+    fn fetch_maps_not_ready_nack() {
+        let i2c =
+            MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+        let mut sensor = Sht3x::new(i2c);
+
+        assert_eq!(sensor.fetch_raw(), Err(Error::NotReady));
+
+        let i2c = sensor.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+    }
+
+    #[test]
+    fn fetch_propagates_other_i2c_error() {
         let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
         let mut sensor = Sht3x::new(i2c);
 
         assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::other())));
-
-        let i2c = sensor.release();
-        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
     }
 
     #[test]
@@ -1741,7 +1774,20 @@ mod tests {
 
     #[cfg(feature = "async")]
     #[test]
-    fn async_fetch_propagates_not_ready_i2c_error() {
+    fn async_fetch_maps_not_ready_nack() {
+        let i2c =
+            MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+        let mut sensor = Sht3x::new(i2c);
+
+        assert_eq!(block_on(sensor.fetch_raw_async()), Err(Error::NotReady));
+
+        let i2c = sensor.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_fetch_propagates_other_i2c_error() {
         let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
         let mut sensor = Sht3x::new(i2c);
 
@@ -1749,9 +1795,6 @@ mod tests {
             block_on(sensor.fetch_raw_async()),
             Err(Error::I2c(MockI2cError::other()))
         );
-
-        let i2c = sensor.release();
-        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
     }
 
     #[test]
