@@ -604,6 +604,10 @@ pub struct ScrollInactive;
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct ScrollActive;
 
+/// Marker type for a stopped scroll that still requires GDDRAM to be rewritten.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct ScrollRestoreRequired;
+
 /// Marker type for the buffered graphics mode.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BufferedGraphicsMode<SIZE>
@@ -993,6 +997,45 @@ where
     }
 }
 
+impl<DI, SIZE> Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollRestoreRequired>
+where
+    DI: I2c<SevenBitAddress>,
+    SIZE: DisplaySize,
+{
+    /// Rewrites the framebuffer after stopping hardware scroll, then returns to the inactive state.
+    pub fn restore_display(
+        mut self,
+    ) -> StateChangeResult<
+        Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollInactive>,
+        Self,
+        DI::Error,
+    > {
+        let result = (|| {
+            self.set_horizontal_addressing_mode()?;
+            self.set_draw_area(0, SIZE::WIDTH - 1, 0, (SIZE::HEIGHT / 8) - 1)?;
+            send_frame(
+                &mut self.i2c,
+                self.address,
+                CONTROL_DATA,
+                self.mode.buffer.as_ref(),
+            )
+        })();
+
+        if let Err(error) = result {
+            return Err(StateChangeError::new(self, error));
+        }
+
+        Ok(Ssd1306 {
+            i2c: self.i2c,
+            address: self.address,
+            mode: self.mode,
+            config: self.config,
+            _size: PhantomData,
+            _scroll: PhantomData,
+        })
+    }
+}
+
 impl<DI, SIZE> Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollInactive>
 where
     DI: I2c<SevenBitAddress>,
@@ -1124,6 +1167,49 @@ where
         let mut orientation = self.config.orientation;
         orientation.com_scan_direction = com_scan_direction;
         self.set_orientation_async(orientation).await
+    }
+}
+
+#[cfg(feature = "async")]
+impl<DI, SIZE> Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollRestoreRequired>
+where
+    DI: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
+    SIZE: DisplaySize,
+{
+    /// Rewrites the framebuffer after stopping hardware scroll, then returns to the inactive state.
+    pub async fn restore_display_async(
+        mut self,
+    ) -> StateChangeResult<
+        Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollInactive>,
+        Self,
+        DI::Error,
+    > {
+        let result = async {
+            self.set_horizontal_addressing_mode_async().await?;
+            self.set_draw_area_async(0, SIZE::WIDTH - 1, 0, (SIZE::HEIGHT / 8) - 1)
+                .await?;
+            send_frame_async(
+                &mut self.i2c,
+                self.address,
+                CONTROL_DATA,
+                self.mode.buffer.as_ref(),
+            )
+            .await
+        }
+        .await;
+
+        if let Err(error) = result {
+            return Err(StateChangeError::new(self, error));
+        }
+
+        Ok(Ssd1306 {
+            i2c: self.i2c,
+            address: self.address,
+            mode: self.mode,
+            config: self.config,
+            _size: PhantomData,
+            _scroll: PhantomData,
+        })
     }
 }
 
@@ -1425,10 +1511,10 @@ where
     DI: I2c<SevenBitAddress>,
     SIZE: DisplaySize,
 {
-    /// Deactivates hardware scrolling.
+    /// Deactivates hardware scrolling and enters a state that requires a RAM rewrite.
     pub fn stop_scroll(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollInactive>, Self, DI::Error> {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollRestoreRequired>, Self, DI::Error> {
         if let Err(error) = self.send_command(0x2E) {
             return Err(StateChangeError::new(self, error));
         }
@@ -1441,6 +1527,24 @@ where
             _size: PhantomData,
             _scroll: PhantomData,
         })
+    }
+}
+
+impl<DI, SIZE, MODE> Ssd1306<DI, SIZE, MODE, ScrollRestoreRequired>
+where
+    SIZE: DisplaySize,
+{
+    /// Marks scroll restoration complete after application code has rewritten GDDRAM.
+    #[must_use]
+    pub fn finish_scroll_rewrite(self) -> Ssd1306<DI, SIZE, MODE, ScrollInactive> {
+        Ssd1306 {
+            i2c: self.i2c,
+            address: self.address,
+            mode: self.mode,
+            config: self.config,
+            _size: PhantomData,
+            _scroll: PhantomData,
+        }
     }
 }
 
@@ -1728,7 +1832,7 @@ where
     /// Async version of [`Self::stop_scroll`].
     pub async fn stop_scroll_async(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollInactive>, Self, DI::Error> {
+    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollRestoreRequired>, Self, DI::Error> {
         if let Err(error) = self.send_command_async(0x2E).await {
             return Err(StateChangeError::new(self, error));
         }
@@ -2466,12 +2570,35 @@ mod tests {
         let display = Ssd1306::new(MockI2c::new(), DisplaySize128x64, Rotation::Rotate0);
 
         let display = display.start_scroll().unwrap();
-        let display = display.stop_scroll().unwrap();
+        let display = display.stop_scroll().unwrap().finish_scroll_rewrite();
 
         let i2c = display.release();
 
         assert_eq!(i2c.writes[0].bytes, Vec::from([0x00, 0x2F]));
         assert_eq!(i2c.writes[1].bytes, Vec::from([0x00, 0x2E]));
+    }
+
+    #[test]
+    fn restore_display_rewrites_framebuffer_after_stopping_scroll() {
+        let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x32, Rotation::Rotate0)
+            .into_buffered_graphics_mode();
+        display.buffer_mut()[0] = 0xAA;
+        display.buffer_mut()[1] = 0x55;
+
+        let display = display.start_scroll().unwrap();
+        let display = display.stop_scroll().unwrap();
+        let display = display.restore_display().unwrap();
+
+        let i2c = display.release();
+
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x00, 0x2F]));
+        assert_eq!(i2c.writes[1].bytes, Vec::from([0x00, 0x2E]));
+        assert_eq!(i2c.writes[2].bytes, Vec::from([0x00, 0x20, 0x00]));
+        assert_eq!(
+            i2c.writes[3].bytes,
+            Vec::from([0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x03])
+        );
+        assert_eq!(i2c.writes[4].bytes[..3], [0x40, 0xAA, 0x55]);
     }
 
     #[test]
@@ -2650,6 +2777,30 @@ mod tests {
             Vec::from([0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x03])
         );
         assert_eq!(i2c.writes[2].bytes[..3], [0x40, 0xAA, 0x55]);
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_restore_display_rewrites_framebuffer_after_stopping_scroll() {
+        let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x32, Rotation::Rotate0)
+            .into_buffered_graphics_mode();
+        display.buffer_mut()[0] = 0xAA;
+        display.buffer_mut()[1] = 0x55;
+
+        let display = block_on(display.start_scroll_async()).unwrap();
+        let display = block_on(display.stop_scroll_async()).unwrap();
+        let display = block_on(display.restore_display_async()).unwrap();
+
+        let i2c = display.release();
+
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x00, 0x2F]));
+        assert_eq!(i2c.writes[1].bytes, Vec::from([0x00, 0x2E]));
+        assert_eq!(i2c.writes[2].bytes, Vec::from([0x00, 0x20, 0x00]));
+        assert_eq!(
+            i2c.writes[3].bytes,
+            Vec::from([0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x03])
+        );
+        assert_eq!(i2c.writes[4].bytes[..3], [0x40, 0xAA, 0x55]);
     }
 
     #[cfg(feature = "async")]

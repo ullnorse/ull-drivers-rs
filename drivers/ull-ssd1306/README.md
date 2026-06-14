@@ -77,8 +77,8 @@ Async methods mirror the blocking API with `_async` suffixes, for example
 - `init()` applies panel-specific multiplex/COM-pin defaults and uses the
   SSD1306 datasheet default contrast value `0x7F`.
 - `init()` also programs the vertical scroll area to the active panel height,
-  so diagonal scrolling starts from a valid `A3h` baseline on `128x64`, `128x32`,
-  and `96x16` panels.
+  so diagonal scrolling starts from an explicit geometry-matched `A3h` setup on
+  `128x64`, `128x32`, and `96x16` panels.
 - `init_with_reset()` and `init_with_config_and_reset()` provide a datasheet-
   style `RES#` pulse for boards that expose the hardware reset pin.
 - The framebuffer is owned by buffered mode. Raw mode has no pixel storage and
@@ -88,5 +88,5 @@ Async methods mirror the blocking API with `_async` suffixes, for example
 - `Orientation` exposes the full hardware layout matrix, while `Rotation`
   remains available as the simple `0` and `180` degree convenience API.
 - `start_scroll()` returns a scroll-active typestate and `stop_scroll()` returns
-  the inactive one, which keeps `flush()` and raw RAM writes unavailable while
-  hardware scrolling is active.
+  a rewrite-required typestate, matching the datasheet requirement to rewrite
+  GDDRAM before resuming normal RAM updates.
