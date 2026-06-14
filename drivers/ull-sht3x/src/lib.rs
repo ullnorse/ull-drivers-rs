@@ -79,8 +79,8 @@ pub enum Repeatability {
 impl Repeatability {
     /// Conservative conversion delay in milliseconds for normal SHT3x supply.
     ///
-    /// These values match the datasheet maxima rounded up: 4 ms, 6 ms, and
-    /// 15 ms. Use [`Self::low_voltage_delay_ms`] below 2.4 V.
+    /// These values match the SHT3x-DIS datasheet Table 4 maxima rounded up:
+    /// 4 ms, 6 ms, and 15 ms. Use [`Self::low_voltage_delay_ms`] below 2.4 V.
     #[must_use]
     pub const fn delay_ms(self) -> u32 {
         match self {
@@ -91,6 +91,9 @@ impl Repeatability {
     }
 
     /// Conservative conversion delay in milliseconds for VDD below 2.4 V.
+    ///
+    /// These values match the SHT3x-DIS datasheet Table 5 maxima rounded up:
+    /// 4.5 ms, 6.5 ms, and 15.5 ms become 5 ms, 7 ms, and 16 ms.
     #[must_use]
     pub const fn low_voltage_delay_ms(self) -> u32 {
         match self {
@@ -620,6 +623,8 @@ where
     }
 
     /// Stops periodic acquisition.
+    ///
+    /// The break command returns the sensor to single-shot mode in 1 ms.
     pub fn stop_periodic<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
     where
         D: DelayNs,
@@ -630,6 +635,8 @@ where
     }
 
     /// Performs a device-specific soft reset.
+    ///
+    /// The SHT3x-DIS soft reset time has a 1.5 ms maximum, so this waits 2 ms.
     pub fn soft_reset<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
     where
         D: DelayNs,
@@ -642,7 +649,9 @@ where
     /// Performs an I2C general-call reset.
     ///
     /// This can reset every compatible device on the shared bus segment that
-    /// responds to the general-call reset sequence.
+    /// responds to the general-call reset sequence. The reset is functionally
+    /// identical to the dedicated reset pin, so this waits 2 ms to cover the
+    /// worst-case power-up time.
     pub fn general_call_reset<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
     where
         D: DelayNs,
@@ -1423,6 +1432,17 @@ mod tests {
     }
 
     #[test]
+    fn repeatability_delay_tables_match_datasheet_maxima() {
+        assert_eq!(Repeatability::Low.delay_ms(), 4);
+        assert_eq!(Repeatability::Medium.delay_ms(), 6);
+        assert_eq!(Repeatability::High.delay_ms(), 15);
+
+        assert_eq!(Repeatability::Low.low_voltage_delay_ms(), 5);
+        assert_eq!(Repeatability::Medium.low_voltage_delay_ms(), 7);
+        assert_eq!(Repeatability::High.low_voltage_delay_ms(), 16);
+    }
+
+    #[test]
     fn periodic_commands_match_datasheet_table() {
         let expected = [
             (PeriodicRate::Mps0_5, Repeatability::High, 0x2032),
@@ -1515,6 +1535,21 @@ mod tests {
         assert_eq!(i2c.writes[0].address, 0x00);
         assert_eq!(i2c.writes[0].bytes, Vec::from([0x06]));
         assert_eq!(delay.delayed_ms, Vec::from([2]));
+    }
+
+    #[test]
+    fn reset_and_break_commands_wait_long_enough() {
+        let i2c = MockI2c::new([]);
+        let mut sensor = Sht3x::new(i2c);
+        let mut delay = MockDelay::default();
+
+        sensor.stop_periodic(&mut delay).unwrap();
+        sensor.soft_reset(&mut delay).unwrap();
+
+        let i2c = sensor.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x30, 0x93]));
+        assert_eq!(i2c.writes[1].bytes, Vec::from([0x30, 0xA2]));
+        assert_eq!(delay.delayed_ms, Vec::from([1, 2]));
     }
 
     #[test]

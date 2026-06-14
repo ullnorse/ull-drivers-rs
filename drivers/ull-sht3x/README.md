@@ -154,7 +154,7 @@ ull-sht3x = { version = "0.1.0", features = ["async", "defmt", "serde"] }
 ## Timing
 
 For single-shot measurements without clock stretching, `measure_raw` and
-`measure` wait for the datasheet maximum conversion time:
+`measure` wait for the datasheet maximum conversion time (Tables 4 and 5):
 
 | Repeatability | Delay |
 | --- | ---: |
@@ -164,11 +164,18 @@ For single-shot measurements without clock stretching, `measure_raw` and
 
 If VDD is below 2.4 V, use `Repeatability::low_voltage_delay_ms()` with your
 own timing logic, or call `measure_raw_low_voltage` / `measure_low_voltage`.
+The low-voltage maxima are rounded up to:
+
+| Repeatability | Delay below 2.4 V |
+| --- | ---: |
+| Low | 5 ms |
+| Medium | 7 ms |
+| High | 16 ms |
 
 After any command write, the datasheet requires a minimum 1 ms gap before the
-sensor can receive another command. Methods such as `measure`, `soft_reset`,
-`general_call_reset`, and `stop_periodic` already wait long enough. For
-configuration commands that can be chained back-to-back, prefer
+sensor can receive another command (section 4). Methods such as `measure`,
+`soft_reset`, `general_call_reset`, and `stop_periodic` already wait long
+enough. For configuration commands that can be chained back-to-back, prefer
 `clear_status_and_wait`, `set_heater_and_wait`, `start_art_and_wait`, and
 `start_periodic_and_wait`. The shorter methods without `_and_wait` are kept for
 callers that manage bus timing themselves.
