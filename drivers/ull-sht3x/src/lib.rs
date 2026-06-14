@@ -1208,19 +1208,38 @@ mod tests {
 
     use super::*;
     use core::convert::Infallible;
+    #[cfg(feature = "async")]
+    use core::{
+        future::Future,
+        task::{Context, Poll, Waker},
+    };
     use embedded_hal::{
         delay::DelayNs,
         i2c::{ErrorKind, ErrorType, Operation},
     };
+    #[cfg(feature = "async")]
+    use std::pin::pin;
     use std::vec::Vec;
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-    struct MockI2cError;
+    struct MockI2cError(ErrorKind);
+
+    impl MockI2cError {
+        const fn other() -> Self {
+            Self(ErrorKind::Other)
+        }
+    }
 
     impl embedded_hal::i2c::Error for MockI2cError {
         fn kind(&self) -> ErrorKind {
-            ErrorKind::Other
+            self.0
         }
+    }
+
+    #[derive(Debug)]
+    enum ReadResponse {
+        Data(Vec<u8>),
+        Error(MockI2cError),
     }
 
     #[derive(Debug)]
@@ -1232,11 +1251,18 @@ mod tests {
     #[derive(Debug)]
     struct MockI2c {
         writes: Vec<Write>,
-        reads: Vec<Vec<u8>>,
+        reads: Vec<ReadResponse>,
     }
 
     impl MockI2c {
         fn new(reads: impl IntoIterator<Item = Vec<u8>>) -> Self {
+            Self {
+                writes: Vec::new(),
+                reads: reads.into_iter().map(ReadResponse::Data).collect(),
+            }
+        }
+
+        fn with_read_responses(reads: impl IntoIterator<Item = ReadResponse>) -> Self {
             Self {
                 writes: Vec::new(),
                 reads: reads.into_iter().collect(),
@@ -1256,11 +1282,38 @@ mod tests {
         ) -> core::result::Result<(), Self::Error> {
             for operation in operations {
                 match operation {
-                    Operation::Read(buffer) => {
-                        let read = self.reads.remove(0);
-                        buffer.copy_from_slice(&read);
-                    }
+                    Operation::Read(buffer) => match self.reads.remove(0) {
+                        ReadResponse::Data(read) => buffer.copy_from_slice(&read),
+                        ReadResponse::Error(error) => return Err(error),
+                    },
                     Operation::Write(bytes) => {
+                        self.writes.push(Write {
+                            address,
+                            bytes: bytes.to_vec(),
+                        });
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "async")]
+    impl embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress> for MockI2c {
+        async fn transaction(
+            &mut self,
+            address: u8,
+            operations: &mut [embedded_hal_async::i2c::Operation<'_>],
+        ) -> core::result::Result<(), Self::Error> {
+            for operation in operations {
+                match operation {
+                    embedded_hal_async::i2c::Operation::Read(buffer) => {
+                        match self.reads.remove(0) {
+                            ReadResponse::Data(read) => buffer.copy_from_slice(&read),
+                            ReadResponse::Error(error) => return Err(error),
+                        }
+                    }
+                    embedded_hal_async::i2c::Operation::Write(bytes) => {
                         self.writes.push(Write {
                             address,
                             bytes: bytes.to_vec(),
@@ -1282,6 +1335,35 @@ mod tests {
 
         fn delay_ms(&mut self, ms: u32) {
             self.delayed_ms.push(ms);
+        }
+    }
+
+    #[cfg(feature = "async")]
+    #[derive(Debug, Default)]
+    struct MockAsyncDelay {
+        delayed_ms: Vec<u32>,
+    }
+
+    #[cfg(feature = "async")]
+    impl embedded_hal_async::delay::DelayNs for MockAsyncDelay {
+        async fn delay_ns(&mut self, _ns: u32) {}
+
+        async fn delay_ms(&mut self, ms: u32) {
+            self.delayed_ms.push(ms);
+        }
+    }
+
+    #[cfg(feature = "async")]
+    fn block_on<F: Future>(future: F) -> F::Output {
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+        let mut future = pin!(future);
+
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Ready(output) => return output,
+                Poll::Pending => core::hint::spin_loop(),
+            }
         }
     }
 
@@ -1367,6 +1449,42 @@ mod tests {
                 word: DataWord::Temperature,
                 expected: crc8([0x12, 0x34]),
                 actual: crc8([0x12, 0x34]) ^ 0x01,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_bad_humidity_crc() {
+        let mut bytes = measurement_bytes(0x1234, 0x5678);
+        bytes[5] ^= 0x01;
+
+        assert_eq!(
+            parse_raw_measurement::<Infallible>(bytes.try_into().unwrap()),
+            Err(Error::Crc {
+                word: DataWord::Humidity,
+                expected: crc8([0x56, 0x78]),
+                actual: crc8([0x56, 0x78]) ^ 0x01,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_bad_status_crc() {
+        let status = 0x1234u16;
+        let [msb, lsb] = status.to_be_bytes();
+        let i2c = MockI2c::with_read_responses([ReadResponse::Data(Vec::from([
+            msb,
+            lsb,
+            crc8([msb, lsb]) ^ 0x01,
+        ]))]);
+        let mut sensor = Sht3x::new(i2c);
+
+        assert_eq!(
+            sensor.status(),
+            Err(Error::Crc {
+                word: DataWord::Status,
+                expected: crc8([msb, lsb]),
+                actual: crc8([msb, lsb]) ^ 0x01,
             })
         );
     }
@@ -1486,6 +1604,17 @@ mod tests {
     }
 
     #[test]
+    fn fetch_propagates_not_ready_i2c_error() {
+        let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
+        let mut sensor = Sht3x::new(i2c);
+
+        assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::other())));
+
+        let i2c = sensor.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+    }
+
+    #[test]
     fn configuration_wait_variants_enforce_command_gap() {
         let i2c = MockI2c::new([]);
         let mut sensor = Sht3x::new(i2c);
@@ -1535,6 +1664,94 @@ mod tests {
         assert_eq!(i2c.writes[0].address, 0x00);
         assert_eq!(i2c.writes[0].bytes, Vec::from([0x06]));
         assert_eq!(delay.delayed_ms, Vec::from([2]));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_measure_uses_single_shot_delay_and_reads_measurement() {
+        let i2c = MockI2c::new([measurement_bytes(0x6666, 0x8000)]);
+        let mut sensor = Sht3x::new(i2c);
+        let mut delay = MockAsyncDelay::default();
+
+        let raw = block_on(sensor.measure_raw_async(&mut delay, Repeatability::High)).unwrap();
+        let i2c = sensor.release();
+
+        assert_eq!(raw.temperature, 0x6666);
+        assert_eq!(raw.humidity, 0x8000);
+        assert_eq!(delay.delayed_ms, Vec::from([15]));
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x24, 0x00]));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_periodic_commands_match_sync_sequence() {
+        let i2c = MockI2c::new([measurement_bytes(0x1111, 0x2222)]);
+        let mut sensor = Sht3x::with_address(i2c, Address::ALTERNATE);
+        let mut delay = MockAsyncDelay::default();
+
+        block_on(sensor.start_periodic_and_wait_async(
+            &mut delay,
+            Repeatability::Medium,
+            PeriodicRate::Mps4,
+        ))
+        .unwrap();
+        let raw = block_on(sensor.fetch_raw_async()).unwrap();
+        let i2c = sensor.release();
+
+        assert_eq!(raw.temperature, 0x1111);
+        assert_eq!(raw.humidity, 0x2222);
+        assert_eq!(delay.delayed_ms, Vec::from([1]));
+        assert_eq!(i2c.writes[0].address, 0x45);
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x23, 0x22]));
+        assert_eq!(i2c.writes[1].bytes, Vec::from([0xE0, 0x00]));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_general_call_reset_waits_and_uses_address_zero() {
+        let i2c = MockI2c::new([]);
+        let mut sensor = Sht3x::new(i2c);
+        let mut delay = MockAsyncDelay::default();
+
+        block_on(sensor.general_call_reset_async(&mut delay)).unwrap();
+        let i2c = sensor.release();
+
+        assert_eq!(i2c.writes[0].address, 0x00);
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0x06]));
+        assert_eq!(delay.delayed_ms, Vec::from([2]));
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_status_reads_and_validates_crc() {
+        let status = 0b1010_0000_0001_0011u16;
+        let [msb, lsb] = status.to_be_bytes();
+        let i2c = MockI2c::new([Vec::from([msb, lsb, crc8([msb, lsb])])]);
+        let mut sensor = Sht3x::new(i2c);
+
+        let status = block_on(sensor.status_async()).unwrap();
+
+        assert!(status.alert_pending());
+        assert!(status.heater_enabled());
+        assert!(status.reset_detected());
+        assert!(status.command_failed());
+        assert!(status.write_checksum_failed());
+        assert!(!status.humidity_alert());
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_fetch_propagates_not_ready_i2c_error() {
+        let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
+        let mut sensor = Sht3x::new(i2c);
+
+        assert_eq!(
+            block_on(sensor.fetch_raw_async()),
+            Err(Error::I2c(MockI2cError::other()))
+        );
+
+        let i2c = sensor.release();
+        assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
     }
 
     #[test]
