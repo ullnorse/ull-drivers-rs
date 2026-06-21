@@ -718,6 +718,13 @@ pub struct Ssd1306<DI, SIZE, MODE, SCROLL = ScrollInactive> {
     _scroll: PhantomData<SCROLL>,
 }
 
+type DriverStateChangeResult<DI, SIZE, MODE, CurrentScroll, NextScroll, BusError> =
+    StateChangeResult<
+        Ssd1306<DI, SIZE, MODE, NextScroll>,
+        Ssd1306<DI, SIZE, MODE, CurrentScroll>,
+        BusError,
+    >;
+
 impl<DI, SIZE> Ssd1306<DI, SIZE, RawMode, ScrollInactive>
 where
     SIZE: DisplaySize,
@@ -1005,9 +1012,12 @@ where
     /// Rewrites the framebuffer after stopping hardware scroll, then returns to the inactive state.
     pub fn restore_display(
         mut self,
-    ) -> StateChangeResult<
-        Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollInactive>,
-        Self,
+    ) -> DriverStateChangeResult<
+        DI,
+        SIZE,
+        BufferedGraphicsMode<SIZE>,
+        ScrollRestoreRequired,
+        ScrollInactive,
         DI::Error,
     > {
         let result = (|| {
@@ -1179,9 +1189,12 @@ where
     /// Rewrites the framebuffer after stopping hardware scroll, then returns to the inactive state.
     pub async fn restore_display_async(
         mut self,
-    ) -> StateChangeResult<
-        Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>, ScrollInactive>,
-        Self,
+    ) -> DriverStateChangeResult<
+        DI,
+        SIZE,
+        BufferedGraphicsMode<SIZE>,
+        ScrollRestoreRequired,
+        ScrollInactive,
         DI::Error,
     > {
         let result = async {
@@ -1490,7 +1503,7 @@ where
     /// Activates the previously configured hardware scroll operation.
     pub fn start_scroll(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollActive>, Self, DI::Error> {
+    ) -> DriverStateChangeResult<DI, SIZE, MODE, ScrollInactive, ScrollActive, DI::Error> {
         if let Err(error) = self.send_command(0x2F) {
             return Err(StateChangeError::new(self, error));
         }
@@ -1514,7 +1527,8 @@ where
     /// Deactivates hardware scrolling and enters a state that requires a RAM rewrite.
     pub fn stop_scroll(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollRestoreRequired>, Self, DI::Error> {
+    ) -> DriverStateChangeResult<DI, SIZE, MODE, ScrollActive, ScrollRestoreRequired, DI::Error>
+    {
         if let Err(error) = self.send_command(0x2E) {
             return Err(StateChangeError::new(self, error));
         }
@@ -1807,7 +1821,7 @@ where
     /// Async version of [`Self::start_scroll`].
     pub async fn start_scroll_async(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollActive>, Self, DI::Error> {
+    ) -> DriverStateChangeResult<DI, SIZE, MODE, ScrollInactive, ScrollActive, DI::Error> {
         if let Err(error) = self.send_command_async(0x2F).await {
             return Err(StateChangeError::new(self, error));
         }
@@ -1832,7 +1846,8 @@ where
     /// Async version of [`Self::stop_scroll`].
     pub async fn stop_scroll_async(
         mut self,
-    ) -> StateChangeResult<Ssd1306<DI, SIZE, MODE, ScrollRestoreRequired>, Self, DI::Error> {
+    ) -> DriverStateChangeResult<DI, SIZE, MODE, ScrollActive, ScrollRestoreRequired, DI::Error>
+    {
         if let Err(error) = self.send_command_async(0x2E).await {
             return Err(StateChangeError::new(self, error));
         }
