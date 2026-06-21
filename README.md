@@ -39,9 +39,40 @@ ull-drivers-rs/
 - Workspace-wide settings currently centralize `edition`, `license`, and repository metadata.
 - Workspace-wide Rust linting forbids `unsafe` code.
 
-## Commands
+## Support Policy
+
+- Minimum supported Rust version: `1.85`
+- Default build mode: `no_std`
+- CI checks the default host toolchain plus `riscv32imac-unknown-none-elf`
+- CI checks every crate feature combination with `cargo-hack`
+- These crates are still `0.x`; breaking API changes are allowed before `1.0`
+
+Support means the repository actively checks these combinations in CI:
+
+- workspace formatting, clippy, tests, and doctests on the stable host toolchain
+- embedded builds for `riscv32imac-unknown-none-elf`
+- feature-matrix builds for `ull-sht3x` and `ull-ssd1306`
+
+## Maintenance Commands
 
 ```bash
-cargo check --workspace
+cargo fmt --check --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
+cargo test --workspace --doc --all-features
+cargo check --workspace --all-features --target riscv32imac-unknown-none-elf
+cargo hack check -p ull-sht3x --feature-powerset --locked --no-dev-deps
+cargo hack check -p ull-ssd1306 --feature-powerset --locked --no-dev-deps
 ```
+
+Install `cargo-hack` first if you want to run the feature-matrix checks locally:
+
+```bash
+cargo install cargo-hack
+```
+
+## Repository Docs
+
+- `CONTRIBUTING.md`: local workflow and change expectations
+- `SECURITY.md`: how to report security issues
+- `PRODUCTION_READINESS.md`: current audit and remaining hardening work

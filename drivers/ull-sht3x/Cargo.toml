@@ -5,6 +5,8 @@ edition.workspace = true
 description = "no_std embedded-hal 1.0 I2C driver for Sensirion SHT3x-DIS humidity and temperature sensors"
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+rust-version = "1.85"
 keywords = ["sht3x", "sht30", "sht31", "sht35", "embedded-hal"]
 categories = ["embedded", "hardware-support", "no-std"]
 
