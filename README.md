@@ -73,6 +73,6 @@ cargo install cargo-hack
 
 ## Repository Docs
 
+- `CHANGELOG.md`: user-visible changes across workspace releases
 - `CONTRIBUTING.md`: local workflow and change expectations
 - `SECURITY.md`: how to report security issues
-- `PRODUCTION_READINESS.md`: current audit and remaining hardening work

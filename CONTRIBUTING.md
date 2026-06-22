@@ -34,6 +34,7 @@ cargo install cargo-hack
 
 - Keep changes as small as possible while still solving the problem.
 - Add or update tests when behavior changes.
+- Update `CHANGELOG.md` when a change affects users of the published crates.
 - Update README or crate docs when public APIs, features, or support policies change.
 - Preserve sync and async API parity unless there is a documented reason to diverge.
 - Avoid introducing a shared internal crate unless multiple drivers genuinely need it.

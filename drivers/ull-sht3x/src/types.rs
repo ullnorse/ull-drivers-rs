@@ -329,6 +329,18 @@ where
     }
 }
 
+impl<I2cError> core::error::Error for Error<I2cError>
+where
+    I2cError: core::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::I2c(error) => Some(error),
+            Self::NotReady | Self::Crc { .. } => None,
+        }
+    }
+}
+
 /// Data word associated with a CRC failure.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -469,6 +469,18 @@ pub enum InvalidArgument {
     VerticalScrollOffsetOutOfRange,
 }
 
+impl core::fmt::Display for InvalidArgument {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::VerticalScrollOffsetOutOfRange => {
+                f.write_str("vertical scroll offset exceeds configured scrolling rows")
+            }
+        }
+    }
+}
+
+impl core::error::Error for InvalidArgument {}
+
 /// Errors returned by the SSD1306 driver.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -487,12 +499,19 @@ where
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Bus(error) => write!(f, "display bus error: {error:?}"),
-            Self::InvalidArgument(InvalidArgument::VerticalScrollOffsetOutOfRange) => {
-                write!(
-                    f,
-                    "vertical scroll offset exceeds configured scrolling rows"
-                )
-            }
+            Self::InvalidArgument(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl<BusError> core::error::Error for Error<BusError>
+where
+    BusError: core::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Bus(error) => Some(error),
+            Self::InvalidArgument(error) => Some(error),
         }
     }
 }
@@ -516,6 +535,19 @@ where
         match self {
             Self::Bus(error) => write!(f, "display bus error: {error:?}"),
             Self::ResetPin(error) => write!(f, "display reset pin error: {error:?}"),
+        }
+    }
+}
+
+impl<BusError, PinError> core::error::Error for InitError<BusError, PinError>
+where
+    BusError: core::error::Error + 'static,
+    PinError: core::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Bus(error) => Some(error),
+            Self::ResetPin(error) => Some(error),
         }
     }
 }

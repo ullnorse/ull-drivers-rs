@@ -26,3 +26,6 @@ async = ["dep:embedded-hal-async"]
 defmt = ["dep:defmt"]
 graphics = ["dep:embedded-graphics-core"]
 serde = ["dep:serde"]
+
+[package.metadata.docs.rs]
+all-features = true

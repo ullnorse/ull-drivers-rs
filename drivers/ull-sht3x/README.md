@@ -141,7 +141,7 @@ read-abort allowance and reduces I2C bus time when humidity is not needed.
 
 ## Optional Features
 
-Both features are disabled by default:
+All optional features are disabled by default:
 
 ```toml
 ull-sht3x = { version = "0.1.0", features = ["async", "defmt", "serde"] }
@@ -180,8 +180,8 @@ enough. For configuration commands that can be chained back-to-back, prefer
 `start_periodic_and_wait`. The shorter methods without `_and_wait` are kept for
 callers that manage bus timing themselves.
 
-When using periodic acquisition, `fetch` and `fetch_raw` can return
-`Error::I2c(_)` if no sample is ready yet. The sensor signals that state by
+When using periodic acquisition, `fetch` and `fetch_raw` return
+`Error::NotReady` if no sample is ready yet. The sensor signals that state by
 NACKing the I2C read header, so this is not necessarily a wiring fault.
 
 `PeriodicRate::Mps10` is supported, but the datasheet warns that self-heating

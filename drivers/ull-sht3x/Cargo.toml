@@ -24,3 +24,6 @@ default = []
 async = ["dep:embedded-hal-async"]
 defmt = ["dep:defmt"]
 serde = ["dep:serde"]
+
+[package.metadata.docs.rs]
+all-features = true
