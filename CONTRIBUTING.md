@@ -16,10 +16,11 @@ Run these before opening a pull request:
 
 ```bash
 cargo fmt --check --all
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo test --workspace --doc --all-features
-cargo check --workspace --all-features --target riscv32imac-unknown-none-elf
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo test --locked --workspace --doc --all-features
+cargo check --locked --workspace --all-features --target riscv32imac-unknown-none-elf
+cargo package --workspace --allow-dirty --locked
 cargo hack check -p ull-sht3x --feature-powerset --locked --no-dev-deps
 cargo hack check -p ull-ssd1306 --feature-powerset --locked --no-dev-deps
 ```

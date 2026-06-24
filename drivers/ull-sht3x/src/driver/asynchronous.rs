@@ -5,9 +5,9 @@ use crate::types::{
 };
 
 use super::{
-    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS,
-    CMD_SOFT_RESET, COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x,
-    SingleShotMode, heater_command, parse_status,
+    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS, CMD_SOFT_RESET,
+    COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x, SingleShotMode, heater_command,
+    parse_status,
 };
 
 impl<I2C> Sht3x<I2C, SingleShotMode>
@@ -170,7 +170,8 @@ where
         repeatability: Repeatability,
         rate: PeriodicRate,
     ) -> Result<Sht3x<I2C, PeriodicMode>, I2C::Error> {
-        self.write_command_async(rate.command(repeatability)).await?;
+        self.write_command_async(rate.command(repeatability))
+            .await?;
         Ok(self.into_mode())
     }
 
@@ -335,7 +336,6 @@ impl<I2C, MODE> Sht3x<I2C, MODE>
 where
     I2C: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
 {
-
     async fn fetch_raw_async_inner(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.write_command_async(CMD_FETCH_DATA).await?;
         self.read_raw_measurement_async()

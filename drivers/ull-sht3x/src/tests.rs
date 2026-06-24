@@ -406,9 +406,8 @@ fn uses_alternate_address_and_periodic_commands() {
 
 #[test]
 fn fetch_maps_not_ready_nack() {
-    let i2c = MockI2c::with_read_responses([ReadResponse::Error(
-        MockI2cError::no_ack_read_header(),
-    )]);
+    let i2c =
+        MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_read_header())]);
     let sensor = Sht3x::new(i2c);
     let mut sensor = sensor
         .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
@@ -429,7 +428,10 @@ fn fetch_propagates_data_nack_as_i2c_error() {
         .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
         .unwrap();
 
-    assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::no_ack_data())));
+    assert_eq!(
+        sensor.fetch_raw(),
+        Err(Error::I2c(MockI2cError::no_ack_data()))
+    );
 }
 
 #[test]
@@ -573,15 +575,11 @@ fn async_status_reads_and_validates_crc() {
 #[cfg(feature = "async")]
 #[test]
 fn async_fetch_maps_not_ready_nack() {
-    let i2c = MockI2c::with_read_responses([ReadResponse::Error(
-        MockI2cError::no_ack_read_header(),
-    )]);
+    let i2c =
+        MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_read_header())]);
     let sensor = Sht3x::new(i2c);
-    let mut sensor = block_on(sensor.start_periodic_async(
-        Repeatability::Low,
-        PeriodicRate::Mps1,
-    ))
-    .unwrap();
+    let mut sensor =
+        block_on(sensor.start_periodic_async(Repeatability::Low, PeriodicRate::Mps1)).unwrap();
 
     assert_eq!(block_on(sensor.fetch_raw_async()), Err(Error::NotReady));
 
@@ -595,11 +593,8 @@ fn async_fetch_maps_not_ready_nack() {
 fn async_fetch_propagates_data_nack_as_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
     let sensor = Sht3x::new(i2c);
-    let mut sensor = block_on(sensor.start_periodic_async(
-        Repeatability::Low,
-        PeriodicRate::Mps1,
-    ))
-    .unwrap();
+    let mut sensor =
+        block_on(sensor.start_periodic_async(Repeatability::Low, PeriodicRate::Mps1)).unwrap();
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),
@@ -612,11 +607,8 @@ fn async_fetch_propagates_data_nack_as_i2c_error() {
 fn async_fetch_propagates_other_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
     let sensor = Sht3x::new(i2c);
-    let mut sensor = block_on(sensor.start_periodic_async(
-        Repeatability::Low,
-        PeriodicRate::Mps1,
-    ))
-    .unwrap();
+    let mut sensor =
+        block_on(sensor.start_periodic_async(Repeatability::Low, PeriodicRate::Mps1)).unwrap();
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),

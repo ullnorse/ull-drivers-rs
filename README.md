@@ -43,13 +43,13 @@ ull-drivers-rs/
 
 - Minimum supported Rust version: `1.85`
 - Default build mode: `no_std`
-- CI checks the default host toolchain plus `riscv32imac-unknown-none-elf`
+- CI checks the pinned Rust `1.85.0` host toolchain plus `riscv32imac-unknown-none-elf`
 - CI checks every crate feature combination with `cargo-hack`
 - These crates are still `0.x`; breaking API changes are allowed before `1.0`
 
 Support means the repository actively checks these combinations in CI:
 
-- workspace formatting, clippy, tests, and doctests on the stable host toolchain
+- workspace formatting, clippy, tests, doctests, and package verification on the pinned `1.85.0` host toolchain
 - embedded builds for `riscv32imac-unknown-none-elf`
 - feature-matrix builds for `ull-sht3x` and `ull-ssd1306`
 
@@ -57,10 +57,11 @@ Support means the repository actively checks these combinations in CI:
 
 ```bash
 cargo fmt --check --all
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo test --workspace --doc --all-features
-cargo check --workspace --all-features --target riscv32imac-unknown-none-elf
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo test --locked --workspace --doc --all-features
+cargo check --locked --workspace --all-features --target riscv32imac-unknown-none-elf
+cargo package --workspace --allow-dirty --locked
 cargo hack check -p ull-sht3x --feature-powerset --locked --no-dev-deps
 cargo hack check -p ull-ssd1306 --feature-powerset --locked --no-dev-deps
 ```

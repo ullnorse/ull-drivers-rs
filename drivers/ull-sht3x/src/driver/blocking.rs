@@ -10,9 +10,9 @@ use crate::types::{
 };
 
 use super::{
-    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS,
-    CMD_SOFT_RESET, COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x,
-    SingleShotMode, heater_command, parse_status,
+    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS, CMD_SOFT_RESET,
+    COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x, SingleShotMode, heater_command,
+    parse_status,
 };
 
 impl<I2C> Sht3x<I2C, SingleShotMode>
@@ -195,10 +195,7 @@ where
     }
 
     /// Starts ART mode, waits for the required command gap, and returns the ART-mode driver.
-    pub fn start_art_and_wait<D>(
-        mut self,
-        delay: &mut D,
-    ) -> Result<Sht3x<I2C, ArtMode>, I2C::Error>
+    pub fn start_art_and_wait<D>(mut self, delay: &mut D) -> Result<Sht3x<I2C, ArtMode>, I2C::Error>
     where
         D: DelayNs,
     {
@@ -349,7 +346,6 @@ impl<I2C, MODE> Sht3x<I2C, MODE>
 where
     I2C: I2c<SevenBitAddress>,
 {
-
     fn fetch_raw_inner(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.write_command(CMD_FETCH_DATA)?;
         self.read_raw_measurement().map_err(map_fetch_error)
