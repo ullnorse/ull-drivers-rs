@@ -25,6 +25,10 @@ impl MockI2cError {
         Self(ErrorKind::Other)
     }
 
+    const fn no_ack_read_header() -> Self {
+        Self(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address))
+    }
+
     const fn no_ack_data() -> Self {
         Self(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data))
     }
@@ -402,13 +406,23 @@ fn uses_alternate_address_and_periodic_commands() {
 
 #[test]
 fn fetch_maps_not_ready_nack() {
-    let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+    let i2c = MockI2c::with_read_responses([ReadResponse::Error(
+        MockI2cError::no_ack_read_header(),
+    )]);
     let mut sensor = Sht3x::new(i2c);
 
     assert_eq!(sensor.fetch_raw(), Err(Error::NotReady));
 
     let i2c = sensor.release();
     assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+}
+
+#[test]
+fn fetch_propagates_data_nack_as_i2c_error() {
+    let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+    let mut sensor = Sht3x::new(i2c);
+
+    assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::no_ack_data())));
 }
 
 #[test]
@@ -547,13 +561,27 @@ fn async_status_reads_and_validates_crc() {
 #[cfg(feature = "async")]
 #[test]
 fn async_fetch_maps_not_ready_nack() {
-    let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+    let i2c = MockI2c::with_read_responses([ReadResponse::Error(
+        MockI2cError::no_ack_read_header(),
+    )]);
     let mut sensor = Sht3x::new(i2c);
 
     assert_eq!(block_on(sensor.fetch_raw_async()), Err(Error::NotReady));
 
     let i2c = sensor.release();
     assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn async_fetch_propagates_data_nack_as_i2c_error() {
+    let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
+    let mut sensor = Sht3x::new(i2c);
+
+    assert_eq!(
+        block_on(sensor.fetch_raw_async()),
+        Err(Error::I2c(MockI2cError::no_ack_data()))
+    );
 }
 
 #[cfg(feature = "async")]

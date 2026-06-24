@@ -372,7 +372,9 @@ where
         Error::I2c(i2c_error)
             if matches!(
                 i2c_error.kind(),
-                embedded_hal::i2c::ErrorKind::NoAcknowledge(_)
+                embedded_hal::i2c::ErrorKind::NoAcknowledge(
+                    embedded_hal::i2c::NoAcknowledgeSource::Address
+                )
             ) =>
         {
             Error::NotReady
