@@ -389,9 +389,9 @@ fn periodic_commands_match_datasheet_table() {
 #[test]
 fn uses_alternate_address_and_periodic_commands() {
     let i2c = MockI2c::new([measurement_bytes(0x1111, 0x2222)]);
-    let mut sensor = Sht3x::with_address(i2c, Address::ALTERNATE);
+    let sensor = Sht3x::with_address(i2c, Address::ALTERNATE);
 
-    sensor
+    let mut sensor = sensor
         .start_periodic(Repeatability::Medium, PeriodicRate::Mps4)
         .unwrap();
     let raw = sensor.fetch_raw().unwrap();
@@ -409,18 +409,25 @@ fn fetch_maps_not_ready_nack() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(
         MockI2cError::no_ack_read_header(),
     )]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = sensor
+        .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
 
     assert_eq!(sensor.fetch_raw(), Err(Error::NotReady));
 
     let i2c = sensor.release();
-    assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+    assert_eq!(i2c.writes[0].bytes, Vec::from([0x21, 0x2D]));
+    assert_eq!(i2c.writes[1].bytes, Vec::from([0xE0, 0x00]));
 }
 
 #[test]
 fn fetch_propagates_data_nack_as_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = sensor
+        .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
 
     assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::no_ack_data())));
 }
@@ -428,7 +435,10 @@ fn fetch_propagates_data_nack_as_i2c_error() {
 #[test]
 fn fetch_propagates_other_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = sensor
+        .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
 
     assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::other())));
 }
@@ -441,17 +451,19 @@ fn configuration_wait_variants_enforce_command_gap() {
 
     sensor.clear_status_and_wait(&mut delay).unwrap();
     sensor.set_heater_and_wait(&mut delay, true).unwrap();
-    sensor.start_art_and_wait(&mut delay).unwrap();
-    sensor
+    let sensor = sensor.start_art_and_wait(&mut delay).unwrap();
+    let sensor = sensor.stop_periodic(&mut delay).unwrap();
+    let sensor = sensor
         .start_periodic_and_wait(&mut delay, Repeatability::Low, PeriodicRate::Mps1)
         .unwrap();
     let i2c = sensor.release();
 
-    assert_eq!(delay.delayed_ms, Vec::from([1, 1, 1, 1]));
+    assert_eq!(delay.delayed_ms, Vec::from([1, 1, 1, 1, 1]));
     assert_eq!(i2c.writes[0].bytes, Vec::from([0x30, 0x41]));
     assert_eq!(i2c.writes[1].bytes, Vec::from([0x30, 0x6D]));
     assert_eq!(i2c.writes[2].bytes, Vec::from([0x2B, 0x32]));
-    assert_eq!(i2c.writes[3].bytes, Vec::from([0x21, 0x2D]));
+    assert_eq!(i2c.writes[3].bytes, Vec::from([0x30, 0x93]));
+    assert_eq!(i2c.writes[4].bytes, Vec::from([0x21, 0x2D]));
 }
 
 #[test]
@@ -505,10 +517,10 @@ fn async_measure_uses_single_shot_delay_and_reads_measurement() {
 #[test]
 fn async_periodic_commands_match_sync_sequence() {
     let i2c = MockI2c::new([measurement_bytes(0x1111, 0x2222)]);
-    let mut sensor = Sht3x::with_address(i2c, Address::ALTERNATE);
+    let sensor = Sht3x::with_address(i2c, Address::ALTERNATE);
     let mut delay = MockAsyncDelay::default();
 
-    block_on(sensor.start_periodic_and_wait_async(
+    let mut sensor = block_on(sensor.start_periodic_and_wait_async(
         &mut delay,
         Repeatability::Medium,
         PeriodicRate::Mps4,
@@ -564,19 +576,30 @@ fn async_fetch_maps_not_ready_nack() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(
         MockI2cError::no_ack_read_header(),
     )]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = block_on(sensor.start_periodic_async(
+        Repeatability::Low,
+        PeriodicRate::Mps1,
+    ))
+    .unwrap();
 
     assert_eq!(block_on(sensor.fetch_raw_async()), Err(Error::NotReady));
 
     let i2c = sensor.release();
-    assert_eq!(i2c.writes[0].bytes, Vec::from([0xE0, 0x00]));
+    assert_eq!(i2c.writes[0].bytes, Vec::from([0x21, 0x2D]));
+    assert_eq!(i2c.writes[1].bytes, Vec::from([0xE0, 0x00]));
 }
 
 #[cfg(feature = "async")]
 #[test]
 fn async_fetch_propagates_data_nack_as_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_data())]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = block_on(sensor.start_periodic_async(
+        Repeatability::Low,
+        PeriodicRate::Mps1,
+    ))
+    .unwrap();
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),
@@ -588,7 +611,12 @@ fn async_fetch_propagates_data_nack_as_i2c_error() {
 #[test]
 fn async_fetch_propagates_other_i2c_error() {
     let i2c = MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::other())]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = block_on(sensor.start_periodic_async(
+        Repeatability::Low,
+        PeriodicRate::Mps1,
+    ))
+    .unwrap();
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),
@@ -599,15 +627,19 @@ fn async_fetch_propagates_other_i2c_error() {
 #[test]
 fn reset_and_break_commands_wait_long_enough() {
     let i2c = MockI2c::new([]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
     let mut delay = MockDelay::default();
 
-    sensor.stop_periodic(&mut delay).unwrap();
+    let sensor = sensor
+        .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
+    let mut sensor = sensor.stop_periodic(&mut delay).unwrap();
     sensor.soft_reset(&mut delay).unwrap();
 
     let i2c = sensor.release();
-    assert_eq!(i2c.writes[0].bytes, Vec::from([0x30, 0x93]));
-    assert_eq!(i2c.writes[1].bytes, Vec::from([0x30, 0xA2]));
+    assert_eq!(i2c.writes[0].bytes, Vec::from([0x21, 0x2D]));
+    assert_eq!(i2c.writes[1].bytes, Vec::from([0x30, 0x93]));
+    assert_eq!(i2c.writes[2].bytes, Vec::from([0x30, 0xA2]));
     assert_eq!(delay.delayed_ms, Vec::from([1, 2]));
 }
 

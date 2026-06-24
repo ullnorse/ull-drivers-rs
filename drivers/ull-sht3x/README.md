@@ -11,6 +11,7 @@ designed to work with any platform whose I2C peripheral type implements
 
 - Single-shot measurement with or without clock stretching
 - Periodic acquisition, fetch, stop, and ART mode commands
+- Typestate acquisition modes that require stopping periodic or ART mode before single-shot commands reappear
 - CRC-8 validation for temperature, humidity, and status words
 - Raw `u16` readings, converted `f32` readings, and integer-only fixed-point readings
 - Temperature-only reads that abort after the first 3-byte data word
@@ -67,7 +68,10 @@ different timing and transfer modes. The intended defaults are:
 
 For periodic acquisition, the usual flow is `start_periodic_and_wait`, then
 `fetch` or `fetch_raw` whenever you want the latest sample, then
-`stop_periodic` before switching back to single-shot commands.
+`stop_periodic` before switching back to single-shot commands. These mode
+transitions are part of the type system: `start_periodic*` returns a
+periodic-mode driver, `start_art*` returns an ART-mode driver, and
+`stop_periodic*` returns the default single-shot driver again.
 
 Methods with `_and_wait` in the name are convenience helpers for commands that
 need the datasheet's 1 ms post-command gap before the next command can be sent.

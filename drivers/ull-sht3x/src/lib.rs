@@ -4,7 +4,7 @@
 mod driver;
 mod types;
 
-pub use driver::Sht3x;
+pub use driver::{ArtMode, PeriodicMode, Sht3x, SingleShotMode};
 pub use types::{
     Address, DataWord, Error, FixedPointMeasurement, Measurement, PeriodicRate, RawMeasurement,
     Repeatability, Result, Status, crc8,

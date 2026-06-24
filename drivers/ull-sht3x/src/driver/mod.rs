@@ -3,6 +3,8 @@ mod blocking;
 #[cfg(feature = "async")]
 mod asynchronous;
 
+use core::marker::PhantomData;
+
 use crate::types::{Address, DataWord, Result, Status, check_crc};
 
 const GENERAL_CALL_ADDRESS: u8 = 0x00;
@@ -18,11 +20,23 @@ const CMD_CLEAR_STATUS: u16 = 0x3041;
 
 const COMMAND_DELAY_MS: u32 = 1;
 
+/// Marker type for the default single-shot command mode.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct SingleShotMode;
+
+/// Marker type for periodic acquisition mode.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct PeriodicMode;
+
+/// Marker type for ART acquisition mode.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct ArtMode;
+
 /// Sensirion SHT3x-DIS embedded-hal 1.0 I2C driver.
 ///
 /// Most applications should start with [`Self::measure`] for one-shot readings
-/// or [`Self::start_periodic_and_wait`] plus [`Self::fetch`] for periodic
-/// acquisition.
+/// or [`Self::start_periodic_and_wait`] followed by `fetch` on the returned
+/// periodic-mode driver.
 ///
 /// Use the more specialized methods only when you need a specific tradeoff:
 ///
@@ -37,9 +51,10 @@ const COMMAND_DELAY_MS: u32 = 1;
 /// - `_and_wait` configuration methods when you want the driver to enforce the
 ///   datasheet's required 1 ms command gap.
 #[derive(Debug)]
-pub struct Sht3x<I2C> {
+pub struct Sht3x<I2C, MODE = SingleShotMode> {
     i2c: I2C,
     address: u8,
+    _mode: PhantomData<MODE>,
 }
 
 impl<I2C> Sht3x<I2C> {
@@ -55,6 +70,17 @@ impl<I2C> Sht3x<I2C> {
         Self {
             i2c,
             address: address.as_u8(),
+            _mode: PhantomData,
+        }
+    }
+}
+
+impl<I2C, MODE> Sht3x<I2C, MODE> {
+    fn into_mode<NEXT>(self) -> Sht3x<I2C, NEXT> {
+        Sht3x {
+            i2c: self.i2c,
+            address: self.address,
+            _mode: PhantomData,
         }
     }
 

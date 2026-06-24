@@ -11,7 +11,8 @@ use embedded_hal::{
 use std::pin::pin;
 use std::vec::Vec;
 use ull_sht3x::{
-    Address, Error, FixedPointMeasurement, Measurement, RawMeasurement, Repeatability, Sht3x, crc8,
+    Address, Error, FixedPointMeasurement, Measurement, PeriodicRate, RawMeasurement,
+    Repeatability, Sht3x, crc8,
 };
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -236,17 +237,68 @@ fn raw_measurement_supports_fixed_point_conversion() {
 fn periodic_fetch_maps_read_header_nack_to_not_ready() {
     let i2c =
         MockI2c::with_read_responses([ReadResponse::Error(MockI2cError::no_ack_read_header())]);
-    let mut sensor = Sht3x::new(i2c);
+    let sensor = Sht3x::new(i2c);
+    let mut sensor = sensor
+        .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
 
     assert_eq!(sensor.fetch(), Err(Error::NotReady));
 
     let i2c = sensor.release();
     assert_eq!(
         i2c.writes,
-        Vec::from([Write {
-            address: 0x44,
-            bytes: Vec::from([0xE0, 0x00]),
-        }])
+        Vec::from([
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0x21, 0x2D]),
+            },
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0xE0, 0x00]),
+            },
+        ])
+    );
+}
+
+#[test]
+fn periodic_mode_returns_single_shot_driver_after_stop() {
+    let i2c = MockI2c::new([
+        measurement_bytes(0x6666, 0x6666),
+        measurement_bytes(0x6666, 0x6666),
+    ]);
+    let mut delay = MockDelay::default();
+
+    let mut sensor = Sht3x::new(i2c)
+        .start_periodic_and_wait(&mut delay, Repeatability::Low, PeriodicRate::Mps1)
+        .unwrap();
+    let periodic = sensor.fetch().unwrap();
+    let mut sensor = sensor.stop_periodic(&mut delay).unwrap();
+    let single_shot = sensor.measure(&mut delay, Repeatability::Low).unwrap();
+    let i2c = sensor.release();
+
+    assert_measurement_close(periodic, 25.0, 40.0);
+    assert_measurement_close(single_shot, 25.0, 40.0);
+    assert_eq!(delay.delayed_ms, Vec::from([1, 1, 4]));
+    assert_eq!(
+        i2c.writes,
+        Vec::from([
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0x21, 0x2D]),
+            },
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0xE0, 0x00]),
+            },
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0x30, 0x93]),
+            },
+            Write {
+                address: 0x44,
+                bytes: Vec::from([0x24, 0x16]),
+            },
+        ])
     );
 }
 

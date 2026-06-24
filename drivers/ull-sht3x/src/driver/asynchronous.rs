@@ -5,11 +5,12 @@ use crate::types::{
 };
 
 use super::{
-    CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS, CMD_SOFT_RESET,
-    COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, Sht3x, heater_command, parse_status,
+    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS,
+    CMD_SOFT_RESET, COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x,
+    SingleShotMode, heater_command, parse_status,
 };
 
-impl<I2C> Sht3x<I2C>
+impl<I2C> Sht3x<I2C, SingleShotMode>
 where
     I2C: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
 {
@@ -165,71 +166,45 @@ where
 
     /// Async version of [`Self::start_periodic`].
     pub async fn start_periodic_async(
-        &mut self,
+        mut self,
         repeatability: Repeatability,
         rate: PeriodicRate,
-    ) -> Result<(), I2C::Error> {
-        self.write_command_async(rate.command(repeatability)).await
+    ) -> Result<Sht3x<I2C, PeriodicMode>, I2C::Error> {
+        self.write_command_async(rate.command(repeatability)).await?;
+        Ok(self.into_mode())
     }
 
     /// Async version of [`Self::start_periodic_and_wait`].
     pub async fn start_periodic_and_wait_async<D>(
-        &mut self,
+        mut self,
         delay: &mut D,
         repeatability: Repeatability,
         rate: PeriodicRate,
-    ) -> Result<(), I2C::Error>
+    ) -> Result<Sht3x<I2C, PeriodicMode>, I2C::Error>
     where
         D: embedded_hal_async::delay::DelayNs,
     {
         self.write_command_and_wait_async(rate.command(repeatability), delay)
-            .await
+            .await?;
+        Ok(self.into_mode())
     }
 
     /// Async version of [`Self::start_art`].
-    pub async fn start_art_async(&mut self) -> Result<(), I2C::Error> {
-        self.write_command_async(CMD_ART).await
+    pub async fn start_art_async(mut self) -> Result<Sht3x<I2C, ArtMode>, I2C::Error> {
+        self.write_command_async(CMD_ART).await?;
+        Ok(self.into_mode())
     }
 
     /// Async version of [`Self::start_art_and_wait`].
-    pub async fn start_art_and_wait_async<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
+    pub async fn start_art_and_wait_async<D>(
+        mut self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, ArtMode>, I2C::Error>
     where
         D: embedded_hal_async::delay::DelayNs,
     {
-        self.write_command_and_wait_async(CMD_ART, delay).await
-    }
-
-    /// Async version of [`Self::fetch`].
-    ///
-    /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK and this returns [`crate::Error::NotReady`]. Other I2C
-    /// failures are still returned as [`crate::Error::I2c`].
-    pub async fn fetch_async(&mut self) -> Result<Measurement, I2C::Error> {
-        self.fetch_raw_async()
-            .await
-            .map(RawMeasurement::to_measurement)
-    }
-
-    /// Async version of [`Self::fetch_raw`].
-    ///
-    /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK and this returns [`crate::Error::NotReady`]. Other I2C
-    /// failures are still returned as [`crate::Error::I2c`].
-    pub async fn fetch_raw_async(&mut self) -> Result<RawMeasurement, I2C::Error> {
-        self.write_command_async(CMD_FETCH_DATA).await?;
-        self.read_raw_measurement_async()
-            .await
-            .map_err(map_fetch_error)
-    }
-
-    /// Async version of [`Self::stop_periodic`].
-    pub async fn stop_periodic_async<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
-    where
-        D: embedded_hal_async::delay::DelayNs,
-    {
-        self.write_command_async(CMD_BREAK).await?;
-        delay.delay_ms(COMMAND_DELAY_MS).await;
-        Ok(())
+        self.write_command_and_wait_async(CMD_ART, delay).await?;
+        Ok(self.into_mode())
     }
 
     /// Async version of [`Self::soft_reset`].
@@ -297,6 +272,87 @@ where
     {
         self.write_command_and_wait_async(CMD_CLEAR_STATUS, delay)
             .await
+    }
+}
+
+impl<I2C> Sht3x<I2C, PeriodicMode>
+where
+    I2C: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
+{
+    /// Async version of [`Self::fetch`].
+    pub async fn fetch_async(&mut self) -> Result<Measurement, I2C::Error> {
+        self.fetch_raw_async()
+            .await
+            .map(RawMeasurement::to_measurement)
+    }
+
+    /// Async version of [`Self::fetch_raw`].
+    pub async fn fetch_raw_async(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.fetch_raw_async_inner().await
+    }
+
+    /// Async version of [`Self::stop_periodic`].
+    pub async fn stop_periodic_async<D>(
+        self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: embedded_hal_async::delay::DelayNs,
+    {
+        self.stop_periodic_async_inner(delay).await
+    }
+}
+
+impl<I2C> Sht3x<I2C, ArtMode>
+where
+    I2C: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
+{
+    /// Async version of [`Self::fetch`].
+    pub async fn fetch_async(&mut self) -> Result<Measurement, I2C::Error> {
+        self.fetch_raw_async()
+            .await
+            .map(RawMeasurement::to_measurement)
+    }
+
+    /// Async version of [`Self::fetch_raw`].
+    pub async fn fetch_raw_async(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.fetch_raw_async_inner().await
+    }
+
+    /// Async version of [`Self::stop_periodic`].
+    pub async fn stop_periodic_async<D>(
+        self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: embedded_hal_async::delay::DelayNs,
+    {
+        self.stop_periodic_async_inner(delay).await
+    }
+}
+
+impl<I2C, MODE> Sht3x<I2C, MODE>
+where
+    I2C: embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress>,
+{
+
+    async fn fetch_raw_async_inner(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.write_command_async(CMD_FETCH_DATA).await?;
+        self.read_raw_measurement_async()
+            .await
+            .map_err(map_fetch_error)
+    }
+
+    async fn stop_periodic_async_inner<D>(
+        mut self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: embedded_hal_async::delay::DelayNs,
+    {
+        self.write_command_async(CMD_BREAK).await?;
+        delay.delay_ms(COMMAND_DELAY_MS).await;
+        Ok(self.into_mode())
     }
 
     async fn write_command_async(&mut self, command: u16) -> Result<(), I2C::Error> {

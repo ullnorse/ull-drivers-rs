@@ -10,11 +10,12 @@ use crate::types::{
 };
 
 use super::{
-    CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS, CMD_SOFT_RESET,
-    COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, Sht3x, heater_command, parse_status,
+    ArtMode, CMD_ART, CMD_BREAK, CMD_CLEAR_STATUS, CMD_FETCH_DATA, CMD_READ_STATUS,
+    CMD_SOFT_RESET, COMMAND_DELAY_MS, GENERAL_CALL_ADDRESS, PeriodicMode, Sht3x,
+    SingleShotMode, heater_command, parse_status,
 };
 
-impl<I2C> Sht3x<I2C>
+impl<I2C> Sht3x<I2C, SingleShotMode>
 where
     I2C: I2c<SevenBitAddress>,
 {
@@ -162,71 +163,47 @@ where
     /// The SHT3x-DIS needs a 1 ms gap before it can receive the next command.
     /// Use [`Self::start_periodic_and_wait`] if the driver should enforce it.
     pub fn start_periodic(
-        &mut self,
+        mut self,
         repeatability: Repeatability,
         rate: PeriodicRate,
-    ) -> Result<(), I2C::Error> {
-        self.write_command(rate.command(repeatability))
+    ) -> Result<Sht3x<I2C, PeriodicMode>, I2C::Error> {
+        self.write_command(rate.command(repeatability))?;
+        Ok(self.into_mode())
     }
 
-    /// Starts periodic acquisition and waits for the required command gap.
+    /// Starts periodic acquisition, waits for the required command gap, and returns the periodic-mode driver.
     pub fn start_periodic_and_wait<D>(
-        &mut self,
+        mut self,
         delay: &mut D,
         repeatability: Repeatability,
         rate: PeriodicRate,
-    ) -> Result<(), I2C::Error>
+    ) -> Result<Sht3x<I2C, PeriodicMode>, I2C::Error>
     where
         D: DelayNs,
     {
-        self.write_command_and_wait(rate.command(repeatability), delay)
+        self.write_command_and_wait(rate.command(repeatability), delay)?;
+        Ok(self.into_mode())
     }
 
     /// Starts periodic acquisition with accelerated response time.
     ///
     /// The SHT3x-DIS needs a 1 ms gap before it can receive the next command.
     /// Use [`Self::start_art_and_wait`] if the driver should enforce it.
-    pub fn start_art(&mut self) -> Result<(), I2C::Error> {
-        self.write_command(CMD_ART)
+    pub fn start_art(mut self) -> Result<Sht3x<I2C, ArtMode>, I2C::Error> {
+        self.write_command(CMD_ART)?;
+        Ok(self.into_mode())
     }
 
-    /// Starts ART mode and waits for the required command gap.
-    pub fn start_art_and_wait<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
+    /// Starts ART mode, waits for the required command gap, and returns the ART-mode driver.
+    pub fn start_art_and_wait<D>(
+        mut self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, ArtMode>, I2C::Error>
     where
         D: DelayNs,
     {
-        self.write_command_and_wait(CMD_ART, delay)
-    }
-
-    /// Fetches one data pair from periodic acquisition.
-    ///
-    /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK and this returns [`crate::Error::NotReady`]. Other I2C
-    /// failures are still returned as [`crate::Error::I2c`].
-    pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
-        self.fetch_raw().map(RawMeasurement::to_measurement)
-    }
-
-    /// Fetches one raw data pair from periodic acquisition.
-    ///
-    /// If no periodic sample is ready yet, the sensor responds to the read
-    /// header with NACK and this returns [`crate::Error::NotReady`]. Other I2C
-    /// failures are still returned as [`crate::Error::I2c`].
-    pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
-        self.write_command(CMD_FETCH_DATA)?;
-        self.read_raw_measurement().map_err(map_fetch_error)
-    }
-
-    /// Stops periodic acquisition.
-    ///
-    /// The break command returns the sensor to single-shot mode in 1 ms.
-    pub fn stop_periodic<D>(&mut self, delay: &mut D) -> Result<(), I2C::Error>
-    where
-        D: DelayNs,
-    {
-        self.write_command(CMD_BREAK)?;
-        delay.delay_ms(COMMAND_DELAY_MS);
-        Ok(())
+        self.write_command_and_wait(CMD_ART, delay)?;
+        Ok(self.into_mode())
     }
 
     /// Performs a device-specific soft reset.
@@ -299,6 +276,95 @@ where
         D: DelayNs,
     {
         self.write_command_and_wait(CMD_CLEAR_STATUS, delay)
+    }
+}
+
+impl<I2C> Sht3x<I2C, PeriodicMode>
+where
+    I2C: I2c<SevenBitAddress>,
+{
+    /// Fetches one data pair from periodic or ART acquisition.
+    ///
+    /// If no sample is ready yet, the sensor responds to the read header with
+    /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
+    /// still returned as [`crate::Error::I2c`].
+    pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
+        self.fetch_raw().map(RawMeasurement::to_measurement)
+    }
+
+    /// Fetches one raw data pair from periodic or ART acquisition.
+    ///
+    /// If no sample is ready yet, the sensor responds to the read header with
+    /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
+    /// still returned as [`crate::Error::I2c`].
+    pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.fetch_raw_inner()
+    }
+
+    /// Stops periodic or ART acquisition and returns the single-shot driver.
+    ///
+    /// The break command returns the sensor to single-shot mode in 1 ms.
+    pub fn stop_periodic<D>(self, delay: &mut D) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: DelayNs,
+    {
+        self.stop_periodic_inner(delay)
+    }
+}
+
+impl<I2C> Sht3x<I2C, ArtMode>
+where
+    I2C: I2c<SevenBitAddress>,
+{
+    /// Fetches one data pair from periodic or ART acquisition.
+    ///
+    /// If no sample is ready yet, the sensor responds to the read header with
+    /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
+    /// still returned as [`crate::Error::I2c`].
+    pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
+        self.fetch_raw().map(RawMeasurement::to_measurement)
+    }
+
+    /// Fetches one raw data pair from periodic or ART acquisition.
+    ///
+    /// If no sample is ready yet, the sensor responds to the read header with
+    /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
+    /// still returned as [`crate::Error::I2c`].
+    pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.fetch_raw_inner()
+    }
+
+    /// Stops periodic or ART acquisition and returns the single-shot driver.
+    ///
+    /// The break command returns the sensor to single-shot mode in 1 ms.
+    pub fn stop_periodic<D>(self, delay: &mut D) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: DelayNs,
+    {
+        self.stop_periodic_inner(delay)
+    }
+}
+
+impl<I2C, MODE> Sht3x<I2C, MODE>
+where
+    I2C: I2c<SevenBitAddress>,
+{
+
+    fn fetch_raw_inner(&mut self) -> Result<RawMeasurement, I2C::Error> {
+        self.write_command(CMD_FETCH_DATA)?;
+        self.read_raw_measurement().map_err(map_fetch_error)
+    }
+
+    fn stop_periodic_inner<D>(
+        mut self,
+        delay: &mut D,
+    ) -> Result<Sht3x<I2C, SingleShotMode>, I2C::Error>
+    where
+        D: DelayNs,
+    {
+        self.write_command(CMD_BREAK)?;
+        delay.delay_ms(COMMAND_DELAY_MS);
+        Ok(self.into_mode())
     }
 
     fn write_command(&mut self, command: u16) -> Result<(), I2C::Error> {
