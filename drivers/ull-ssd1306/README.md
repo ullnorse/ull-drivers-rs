@@ -24,7 +24,7 @@ The driver is built around three ideas:
 - hardware orientation control without remapping framebuffer coordinates
 - full segment-remap and COM-scan orientation control
 - optional `embedded-graphics-core` integration
-- optional `defmt` and `serde` derives on public data types
+- optional `defmt` support
 
 ## Usage Sketch
 

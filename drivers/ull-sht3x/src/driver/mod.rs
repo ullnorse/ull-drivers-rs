@@ -44,8 +44,6 @@ pub struct ArtMode;
 ///   conversion via [`crate::RawMeasurement::to_fixed_point`].
 /// - [`Self::measure_temperature`] or [`Self::measure_temperature_millicelsius`]
 ///   if humidity is not needed and you want a shorter read transaction.
-/// - `*_low_voltage` variants when VDD is below 2.4 V and the longer datasheet
-///   conversion delays must be used.
 /// - `*_with_clock_stretching` variants only when the I2C controller supports
 ///   sensor-driven clock stretching.
 /// - `_and_wait` configuration methods when you want the driver to enforce the

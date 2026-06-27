@@ -222,7 +222,6 @@ fn raw_measurement_supports_fixed_point_conversion() {
             relative_humidity_hundredths: 4_000,
         }
     );
-    assert_eq!(raw.temperature_millifahrenheit(), 77_000);
     assert_eq!(delay.delayed_ms, Vec::from([6]));
     assert_eq!(
         i2c.writes,

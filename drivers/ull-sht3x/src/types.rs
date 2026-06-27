@@ -11,7 +11,6 @@ pub type Result<T, E> = core::result::Result<T, Error<E>>;
 /// SHT3x-DIS I2C address selection.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Address(u8);
 
 impl Address {
@@ -47,7 +46,6 @@ impl Default for Address {
 /// Measurement repeatability.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Repeatability {
     /// Shortest conversion time with the lowest repeatability.
     Low,
@@ -99,7 +97,6 @@ impl Repeatability {
 /// Periodic acquisition rate.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeriodicRate {
     /// 0.5 measurements per second.
     Mps0_5,
@@ -142,7 +139,6 @@ impl PeriodicRate {
 /// Raw 16-bit sensor output.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawMeasurement {
     /// Raw temperature word from the sensor.
     pub temperature: u16,
@@ -181,14 +177,6 @@ impl RawMeasurement {
         temperature_millicelsius_from_raw(self.temperature)
     }
 
-    /// Converts only the raw temperature output to millidegrees Fahrenheit.
-    ///
-    /// For example, `-49000` means `-49.000 deg F`.
-    #[must_use]
-    pub const fn temperature_millifahrenheit(self) -> i32 {
-        temperature_millifahrenheit_from_raw(self.temperature)
-    }
-
     /// Converts only the raw humidity output to hundredths of a percent RH.
     ///
     /// For example, `4512` means `45.12 %RH`.
@@ -204,12 +192,6 @@ impl RawMeasurement {
         temperature_celsius_from_raw(self.temperature)
     }
 
-    /// Converts only the raw temperature output to degrees Fahrenheit.
-    #[must_use]
-    pub fn temperature_fahrenheit(self) -> f32 {
-        temperature_fahrenheit_from_raw(self.temperature)
-    }
-
     /// Converts only the raw humidity output to relative humidity in percent.
     #[must_use]
     pub fn relative_humidity(self) -> f32 {
@@ -220,7 +202,6 @@ impl RawMeasurement {
 /// Converted sensor output.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Measurement {
     /// Temperature in degrees Celsius.
     pub temperature_celsius: f32,
@@ -231,7 +212,6 @@ pub struct Measurement {
 /// Integer-only converted sensor output.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FixedPointMeasurement {
     /// Temperature in millidegrees Celsius. `21562` means `21.562 deg C`.
     pub temperature_millicelsius: i32,
@@ -242,7 +222,6 @@ pub struct FixedPointMeasurement {
 /// Status register bits.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Status(pub u16);
 
 impl Status {
@@ -292,7 +271,6 @@ impl Status {
 /// Driver errors.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error<I2cError> {
     /// I2C bus error from the HAL.
     I2c(I2cError),
@@ -344,7 +322,6 @@ where
 /// Data word associated with a CRC failure.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DataWord {
     /// The temperature data word.
     Temperature,
@@ -392,18 +369,9 @@ pub(crate) fn temperature_celsius_from_raw(raw: u16) -> f32 {
     -45.0 + 175.0 * raw as f32 / MAX_RAW
 }
 
-pub(crate) fn temperature_fahrenheit_from_raw(raw: u16) -> f32 {
-    -49.0 + 315.0 * raw as f32 / MAX_RAW
-}
-
 pub(crate) const fn temperature_millicelsius_from_raw(raw: u16) -> i32 {
     let raw = raw as i64;
     (-45_000 + (175_000 * raw) / 65_535) as i32
-}
-
-pub(crate) const fn temperature_millifahrenheit_from_raw(raw: u16) -> i32 {
-    let raw = raw as i64;
-    (-49_000 + (315_000 * raw) / 65_535) as i32
 }
 
 pub(crate) fn check_crc<E>(word: DataWord, msb: u8, lsb: u8, actual: u8) -> Result<(), E> {

@@ -207,7 +207,6 @@ fn parses_raw_measurement_and_converts_units() {
             .unwrap();
 
     assert_eq!(raw.temperature_celsius(), 130.0);
-    assert!((raw.temperature_fahrenheit() - 266.0).abs() < 0.001);
     assert_eq!(raw.relative_humidity(), 100.0);
 }
 
@@ -219,7 +218,6 @@ fn converts_units_with_integer_only_math() {
     };
 
     assert_eq!(raw.temperature_millicelsius(), -45_000);
-    assert_eq!(raw.temperature_millifahrenheit(), -49_000);
     assert_eq!(raw.relative_humidity_hundredths(), 0);
     assert_eq!(
         raw.to_fixed_point(),
@@ -235,7 +233,6 @@ fn converts_units_with_integer_only_math() {
     };
 
     assert_eq!(raw.temperature_millicelsius(), 130_000);
-    assert_eq!(raw.temperature_millifahrenheit(), 266_000);
     assert_eq!(raw.relative_humidity_hundredths(), 10_000);
 }
 
@@ -335,19 +332,6 @@ fn measures_temperature_only_with_short_read() {
     assert_eq!(raw, 0x6666);
     assert_eq!(delay.delayed_ms, Vec::from([15]));
     assert_eq!(i2c.writes[0].bytes, Vec::from([0x24, 0x00]));
-}
-
-#[test]
-fn low_voltage_measurement_uses_longer_delay() {
-    let i2c = MockI2c::new([measurement_bytes(0x6666, 0x8000)]);
-    let mut sensor = Sht3x::new(i2c);
-    let mut delay = MockDelay::default();
-
-    sensor
-        .measure_raw_low_voltage(&mut delay, Repeatability::Medium)
-        .unwrap();
-
-    assert_eq!(delay.delayed_ms, Vec::from([7]));
 }
 
 #[test]

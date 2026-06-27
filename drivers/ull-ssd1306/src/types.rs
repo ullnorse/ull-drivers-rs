@@ -8,7 +8,6 @@ pub type Result<T, E> = core::result::Result<T, Error<E>>;
 /// SSD1306 I2C address selection.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Address(u8);
 
 impl Address {
@@ -44,7 +43,6 @@ impl Default for Address {
 /// SSD1306 page address for the selected panel size.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Page<SIZE> {
     value: u8,
     _size: PhantomData<SIZE>,
@@ -95,7 +93,6 @@ where
 /// Inclusive SSD1306 page range used by hardware scrolling commands.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageRange<SIZE> {
     start: Page<SIZE>,
     end: Page<SIZE>,
@@ -140,7 +137,6 @@ where
 /// SSD1306 display line / vertical offset for the selected panel size.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DisplayLine<SIZE> {
     value: u8,
     _size: PhantomData<SIZE>,
@@ -182,7 +178,6 @@ where
 /// Raw SSD1306 display-offset register value in COM lines.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DisplayOffset {
     value: u8,
 }
@@ -214,7 +209,6 @@ impl DisplayOffset {
 /// Number of panel rows for the selected display size.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RowCount<SIZE> {
     value: u8,
     _size: PhantomData<SIZE>,
@@ -265,7 +259,6 @@ where
 /// Vertical scroll area configuration for continuous diagonal scrolling.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VerticalScrollArea<SIZE> {
     top_fixed_rows: RowCount<SIZE>,
     scroll_rows: RowCount<SIZE>,
@@ -322,7 +315,6 @@ where
 /// Display rotation.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Rotation {
     /// Segment 0 at column 0, COM 0 at row 0.
     #[default]
@@ -334,7 +326,6 @@ pub enum Rotation {
 /// SSD1306 segment mapping configuration.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SegmentRemap {
     /// Column address 0 is mapped to SEG0.
     #[default]
@@ -346,7 +337,6 @@ pub enum SegmentRemap {
 /// SSD1306 COM output scan direction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComScanDirection {
     /// Scan from COM0 to COM[N-1].
     #[default]
@@ -358,7 +348,6 @@ pub enum ComScanDirection {
 /// Full display orientation as a combination of segment and COM remapping.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Orientation {
     /// Segment remap configuration.
     pub segment_remap: SegmentRemap,
@@ -402,7 +391,6 @@ impl From<Rotation> for Orientation {
 /// Panel power source selection for initialization defaults.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PowerSource {
     /// Use the SSD1306 internal charge pump.
     #[default]
@@ -414,7 +402,6 @@ pub enum PowerSource {
 /// Horizontal hardware scroll direction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ScrollDirection {
     /// Scroll toward increasing column addresses on screen.
     Right,
@@ -425,7 +412,6 @@ pub enum ScrollDirection {
 /// Hardware scroll step interval in display frames.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ScrollFrameInterval {
     Frames2,
     Frames3,
@@ -440,7 +426,6 @@ pub enum ScrollFrameInterval {
 /// Initialization options applied by [`crate::Ssd1306::init_with_config`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Config {
     /// Display orientation.
     pub orientation: Orientation,
@@ -463,7 +448,6 @@ impl Default for Config {
 /// Invalid API arguments rejected by the SSD1306 driver.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidArgument {
     /// The diagonal scroll vertical offset must fit within the configured scrolling rows.
     VerticalScrollOffsetOutOfRange,
@@ -484,7 +468,6 @@ impl core::error::Error for InvalidArgument {}
 /// Errors returned by the SSD1306 driver.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error<BusError> {
     /// Bus error while talking to the display.
     Bus(BusError),

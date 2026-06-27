@@ -86,54 +86,6 @@ where
         .await
     }
 
-    /// Async version of [`Self::measure_low_voltage`].
-    pub async fn measure_low_voltage_async<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<Measurement, I2C::Error>
-    where
-        D: embedded_hal_async::delay::DelayNs,
-    {
-        self.measure_raw_low_voltage_async(delay, repeatability)
-            .await
-            .map(RawMeasurement::to_measurement)
-    }
-
-    /// Async version of [`Self::measure_raw_low_voltage`].
-    pub async fn measure_raw_low_voltage_async<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<RawMeasurement, I2C::Error>
-    where
-        D: embedded_hal_async::delay::DelayNs,
-    {
-        self.measure_raw_after_delay_async(
-            delay,
-            repeatability,
-            repeatability.low_voltage_delay_ms(),
-        )
-        .await
-    }
-
-    /// Async version of [`Self::measure_temperature_raw_low_voltage`].
-    pub async fn measure_temperature_raw_low_voltage_async<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<u16, I2C::Error>
-    where
-        D: embedded_hal_async::delay::DelayNs,
-    {
-        self.measure_temperature_raw_after_delay_async(
-            delay,
-            repeatability,
-            repeatability.low_voltage_delay_ms(),
-        )
-        .await
-    }
-
     /// Async version of [`Self::measure_with_clock_stretching`].
     pub async fn measure_with_clock_stretching_async(
         &mut self,

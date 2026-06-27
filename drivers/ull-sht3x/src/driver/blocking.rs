@@ -88,47 +88,6 @@ where
         self.measure_temperature_raw_after_delay(delay, repeatability, repeatability.delay_ms())
     }
 
-    /// Triggers one measurement without clock stretching at VDD below 2.4 V.
-    pub fn measure_low_voltage<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<Measurement, I2C::Error>
-    where
-        D: DelayNs,
-    {
-        self.measure_raw_low_voltage(delay, repeatability)
-            .map(RawMeasurement::to_measurement)
-    }
-
-    /// Triggers one raw measurement without clock stretching at VDD below 2.4 V.
-    pub fn measure_raw_low_voltage<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<RawMeasurement, I2C::Error>
-    where
-        D: DelayNs,
-    {
-        self.measure_raw_after_delay(delay, repeatability, repeatability.low_voltage_delay_ms())
-    }
-
-    /// Triggers one low-voltage measurement and reads only the temperature word.
-    pub fn measure_temperature_raw_low_voltage<D>(
-        &mut self,
-        delay: &mut D,
-        repeatability: Repeatability,
-    ) -> Result<u16, I2C::Error>
-    where
-        D: DelayNs,
-    {
-        self.measure_temperature_raw_after_delay(
-            delay,
-            repeatability,
-            repeatability.low_voltage_delay_ms(),
-        )
-    }
-
     /// Triggers one measurement with clock stretching enabled.
     ///
     /// The I2C implementation must support clock stretching. ESP HAL I2C does.
