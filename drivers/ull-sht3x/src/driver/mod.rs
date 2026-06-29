@@ -1,7 +1,7 @@
 mod blocking;
 
 #[cfg(feature = "async")]
-mod asynchronous;
+mod r#async;
 
 use core::marker::PhantomData;
 

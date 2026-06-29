@@ -13,3 +13,7 @@ The ability to try lower-level device behavior when needed without modeling ever
 ### Small focused commits
 
 Commits that each capture one coherent change and use short conventional prefixes such as `fix:`, `test:`, `chore:`, or `docs:`. A focused commit should make sense on its own instead of mixing unrelated cleanup, feature work, and documentation changes.
+
+### Driver house style
+
+The repository's documented pattern for writing `ull-*` embedded-hal drivers. It is captured in `docs/driver-style.md` and should be treated as the source of truth for agent-written drivers: one crate per device family, driver-owned bus, `new`/`with_address` constructors, `release` for returning peripherals, `Error::Bus` for transport failures, primary blocking APIs with `_async` mirrors, and typestate only where it prevents real invalid device behavior.

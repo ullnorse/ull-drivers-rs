@@ -186,7 +186,7 @@ where
     {
         self.i2c
             .write(GENERAL_CALL_ADDRESS, &[0x06])
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         delay.delay_ms(2);
         Ok(())
     }
@@ -213,7 +213,7 @@ where
         self.write_command(CMD_READ_STATUS)?;
         self.i2c
             .read(self.address, &mut data)
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
 
         parse_status(data)
     }
@@ -243,7 +243,7 @@ where
     ///
     /// If no sample is ready yet, the sensor responds to the read header with
     /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
-    /// still returned as [`crate::Error::I2c`].
+    /// still returned as [`crate::Error::Bus`].
     pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
         self.fetch_raw().map(RawMeasurement::to_measurement)
     }
@@ -252,7 +252,7 @@ where
     ///
     /// If no sample is ready yet, the sensor responds to the read header with
     /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
-    /// still returned as [`crate::Error::I2c`].
+    /// still returned as [`crate::Error::Bus`].
     pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.fetch_raw_inner()
     }
@@ -276,7 +276,7 @@ where
     ///
     /// If no sample is ready yet, the sensor responds to the read header with
     /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
-    /// still returned as [`crate::Error::I2c`].
+    /// still returned as [`crate::Error::Bus`].
     pub fn fetch(&mut self) -> Result<Measurement, I2C::Error> {
         self.fetch_raw().map(RawMeasurement::to_measurement)
     }
@@ -285,7 +285,7 @@ where
     ///
     /// If no sample is ready yet, the sensor responds to the read header with
     /// NACK and this returns [`crate::Error::NotReady`]. Other I2C failures are
-    /// still returned as [`crate::Error::I2c`].
+    /// still returned as [`crate::Error::Bus`].
     pub fn fetch_raw(&mut self) -> Result<RawMeasurement, I2C::Error> {
         self.fetch_raw_inner()
     }
@@ -325,7 +325,7 @@ where
     fn write_command(&mut self, command: u16) -> Result<(), I2C::Error> {
         self.i2c
             .write(self.address, &command.to_be_bytes())
-            .map_err(crate::Error::I2c)
+            .map_err(crate::Error::Bus)
     }
 
     fn write_command_and_wait<D>(&mut self, command: u16, delay: &mut D) -> Result<(), I2C::Error>
@@ -369,7 +369,7 @@ where
         let mut data = [0; 6];
         self.i2c
             .read(self.address, &mut data)
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         parse_raw_measurement(data)
     }
 
@@ -377,7 +377,7 @@ where
         let mut data = [0; 3];
         self.i2c
             .read(self.address, &mut data)
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         parse_raw_temperature(data)
     }
 }

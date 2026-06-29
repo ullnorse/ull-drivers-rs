@@ -271,9 +271,9 @@ impl Status {
 /// Driver errors.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error<I2cError> {
-    /// I2C bus error from the HAL.
-    I2c(I2cError),
+pub enum Error<BusError> {
+    /// Bus error from the HAL.
+    Bus(BusError),
     /// Periodic fetch was attempted before a measurement was ready.
     NotReady,
     /// CRC byte did not match the preceding data word.
@@ -287,13 +287,13 @@ pub enum Error<I2cError> {
     },
 }
 
-impl<I2cError> core::fmt::Display for Error<I2cError>
+impl<BusError> core::fmt::Display for Error<BusError>
 where
-    I2cError: core::fmt::Debug,
+    BusError: core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::I2c(error) => write!(f, "I2C bus error: {error:?}"),
+            Self::Bus(error) => write!(f, "sensor bus error: {error:?}"),
             Self::NotReady => f.write_str("measurement not ready"),
             Self::Crc {
                 word,
@@ -307,13 +307,13 @@ where
     }
 }
 
-impl<I2cError> core::error::Error for Error<I2cError>
+impl<BusError> core::error::Error for Error<BusError>
 where
-    I2cError: core::error::Error + 'static,
+    BusError: core::error::Error + 'static,
 {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
-            Self::I2c(error) => Some(error),
+            Self::Bus(error) => Some(error),
             Self::NotReady | Self::Crc { .. } => None,
         }
     }
@@ -341,14 +341,14 @@ pub(crate) fn parse_raw_measurement<E>(data: [u8; 6]) -> Result<RawMeasurement, 
     })
 }
 
-pub(crate) fn map_fetch_error<I2cError>(error: Error<I2cError>) -> Error<I2cError>
+pub(crate) fn map_fetch_error<BusError>(error: Error<BusError>) -> Error<BusError>
 where
-    I2cError: embedded_hal::i2c::Error,
+    BusError: embedded_hal::i2c::Error,
 {
     match error {
-        Error::I2c(i2c_error)
+        Error::Bus(bus_error)
             if matches!(
-                i2c_error.kind(),
+                bus_error.kind(),
                 embedded_hal::i2c::ErrorKind::NoAcknowledge(
                     embedded_hal::i2c::NoAcknowledgeSource::Address
                 )

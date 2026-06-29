@@ -414,7 +414,7 @@ fn fetch_propagates_data_nack_as_i2c_error() {
 
     assert_eq!(
         sensor.fetch_raw(),
-        Err(Error::I2c(MockI2cError::no_ack_data()))
+        Err(Error::Bus(MockI2cError::no_ack_data()))
     );
 }
 
@@ -426,7 +426,7 @@ fn fetch_propagates_other_i2c_error() {
         .start_periodic(Repeatability::Low, PeriodicRate::Mps1)
         .unwrap();
 
-    assert_eq!(sensor.fetch_raw(), Err(Error::I2c(MockI2cError::other())));
+    assert_eq!(sensor.fetch_raw(), Err(Error::Bus(MockI2cError::other())));
 }
 
 #[test]
@@ -582,7 +582,7 @@ fn async_fetch_propagates_data_nack_as_i2c_error() {
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),
-        Err(Error::I2c(MockI2cError::no_ack_data()))
+        Err(Error::Bus(MockI2cError::no_ack_data()))
     );
 }
 
@@ -596,7 +596,7 @@ fn async_fetch_propagates_other_i2c_error() {
 
     assert_eq!(
         block_on(sensor.fetch_raw_async()),
-        Err(Error::I2c(MockI2cError::other()))
+        Err(Error::Bus(MockI2cError::other()))
     );
 }
 

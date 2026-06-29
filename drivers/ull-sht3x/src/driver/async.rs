@@ -178,7 +178,7 @@ where
         self.i2c
             .write(GENERAL_CALL_ADDRESS, &[0x06])
             .await
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         delay.delay_ms(2).await;
         Ok(())
     }
@@ -208,7 +208,7 @@ where
         self.i2c
             .read(self.address, &mut data)
             .await
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
 
         parse_status(data)
     }
@@ -311,7 +311,7 @@ where
         self.i2c
             .write(self.address, &command.to_be_bytes())
             .await
-            .map_err(crate::Error::I2c)
+            .map_err(crate::Error::Bus)
     }
 
     async fn write_command_and_wait_async<D>(
@@ -362,7 +362,7 @@ where
         self.i2c
             .read(self.address, &mut data)
             .await
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         parse_raw_measurement(data)
     }
 
@@ -371,7 +371,7 @@ where
         self.i2c
             .read(self.address, &mut data)
             .await
-            .map_err(crate::Error::I2c)?;
+            .map_err(crate::Error::Bus)?;
         parse_raw_temperature(data)
     }
 }

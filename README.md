@@ -24,6 +24,8 @@ ull-drivers-rs/
 ├── drivers/
 │   ├── ull-sht3x/
 │   └── ull-ssd1306/
+├── docs/
+│   └── driver-style.md
 ├── Cargo.toml
 └── LICENSE
 ```
@@ -36,6 +38,7 @@ ull-drivers-rs/
 ## Notes
 
 - This workspace currently keeps shared code inside each driver until multiple crates expose a real common layer.
+- Driver style is documented in [`docs/driver-style.md`](docs/driver-style.md); use it as the source of truth for new `ull-*` drivers.
 - Workspace-wide settings currently centralize `edition`, `license`, and repository metadata.
 - Workspace-wide Rust linting forbids `unsafe` code.
 
