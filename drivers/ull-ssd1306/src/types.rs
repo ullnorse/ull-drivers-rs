@@ -304,11 +304,49 @@ where
     pub const fn scroll_rows(self) -> RowCount<SIZE> {
         self.scroll_rows
     }
+}
 
-    /// Returns whether a vertical offset is valid for this scroll area.
+/// Vertical scroll area plus the per-step vertical offset for diagonal scrolling.
+///
+/// The offset must be smaller than the area's scrolling row count, so an
+/// invalid combination cannot reach the controller.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DiagonalScroll<SIZE> {
+    area: VerticalScrollArea<SIZE>,
+    vertical_offset: DisplayLine<SIZE>,
+}
+
+impl<SIZE> DiagonalScroll<SIZE>
+where
+    SIZE: DisplaySize,
+{
+    /// Creates a diagonal scroll setup if the offset fits within the scrolling rows.
     #[must_use]
-    pub const fn supports_offset(self, offset: DisplayLine<SIZE>) -> bool {
-        offset.as_u8() < self.scroll_rows.as_u8()
+    pub const fn new(
+        area: VerticalScrollArea<SIZE>,
+        vertical_offset: DisplayLine<SIZE>,
+    ) -> Option<Self> {
+        if vertical_offset.as_u8() < area.scroll_rows().as_u8() {
+            Some(Self {
+                area,
+                vertical_offset,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Returns the vertical scroll area.
+    #[must_use]
+    pub const fn area(self) -> VerticalScrollArea<SIZE> {
+        self.area
+    }
+
+    /// Returns the vertical offset applied per scroll step.
+    #[must_use]
+    pub const fn vertical_offset(self) -> DisplayLine<SIZE> {
+        self.vertical_offset
     }
 }
 
@@ -445,34 +483,12 @@ impl Default for Config {
     }
 }
 
-/// Invalid API arguments rejected by the SSD1306 driver.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum InvalidArgument {
-    /// The diagonal scroll vertical offset must fit within the configured scrolling rows.
-    VerticalScrollOffsetOutOfRange,
-}
-
-impl core::fmt::Display for InvalidArgument {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::VerticalScrollOffsetOutOfRange => {
-                f.write_str("vertical scroll offset exceeds configured scrolling rows")
-            }
-        }
-    }
-}
-
-impl core::error::Error for InvalidArgument {}
-
 /// Errors returned by the SSD1306 driver.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<BusError> {
     /// Bus error while talking to the display.
     Bus(BusError),
-    /// Invalid API arguments.
-    InvalidArgument(InvalidArgument),
 }
 
 impl<BusError> core::fmt::Display for Error<BusError>
@@ -482,7 +498,6 @@ where
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Bus(error) => write!(f, "display bus error: {error:?}"),
-            Self::InvalidArgument(error) => write!(f, "{error}"),
         }
     }
 }
@@ -494,7 +509,6 @@ where
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Bus(error) => Some(error),
-            Self::InvalidArgument(error) => Some(error),
         }
     }
 }

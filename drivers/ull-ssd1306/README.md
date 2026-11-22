@@ -74,6 +74,10 @@ Async methods mirror the blocking API with `_async` suffixes, for example
 
 - The public API takes `embedded-hal` I2C implementations directly and applies
   SSD1306 command/data framing internally.
+- Each command list or RAM write is one I2C transaction: the control byte and
+  the payload are adjacent write operations, so a full-frame flush is one
+  bus write with no copy. Flushing an area that spans the full width is also one
+  write; narrower areas send one write per page.
 - `init()` applies panel-specific multiplex/COM-pin defaults and uses the
   SSD1306 datasheet default contrast value `0x7F`.
 - `init()` also programs the vertical scroll area to the active panel height,
@@ -90,3 +94,6 @@ Async methods mirror the blocking API with `_async` suffixes, for example
 - `start_scroll()` returns a scroll-active typestate and `stop_scroll()` returns
   a rewrite-required typestate, matching the datasheet requirement to rewrite
   GDDRAM before resuming normal RAM updates.
+- `DiagonalScroll<SIZE>` pairs the vertical scroll area with its per-step
+  offset and only accepts offsets smaller than the scrolling row count, so
+  driver errors are bus errors only.

@@ -73,15 +73,19 @@ impl I2c<SevenBitAddress> for MockI2c {
             return Err(MockI2cError);
         }
 
+        // Adjacent writes in one transaction are one bus write (embedded-hal 1.0).
+
+        let mut bytes = Vec::new();
+
         for operation in operations {
             match operation {
                 Operation::Read(_) => return Err(MockI2cError),
-                Operation::Write(bytes) => self.writes.push(Write {
-                    address,
-                    bytes: bytes.to_vec(),
-                }),
+
+                Operation::Write(chunk) => bytes.extend_from_slice(chunk),
             }
         }
+
+        self.writes.push(Write { address, bytes });
 
         Ok(())
     }
@@ -98,15 +102,19 @@ impl embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress> for 
             return Err(MockI2cError);
         }
 
+        // Adjacent writes in one transaction are one bus write (embedded-hal 1.0).
+
+        let mut bytes = Vec::new();
+
         for operation in operations {
             match operation {
                 embedded_hal_async::i2c::Operation::Read(_) => return Err(MockI2cError),
-                embedded_hal_async::i2c::Operation::Write(bytes) => self.writes.push(Write {
-                    address,
-                    bytes: bytes.to_vec(),
-                }),
+
+                embedded_hal_async::i2c::Operation::Write(chunk) => bytes.extend_from_slice(chunk),
             }
         }
+
+        self.writes.push(Write { address, bytes });
 
         Ok(())
     }
@@ -239,8 +247,8 @@ fn vertical_scroll_area_respects_mux_constraints() {
         RowCount::new(24).unwrap(),
     )
     .unwrap();
-    assert!(area.supports_offset(DisplayLine::new(23).unwrap()));
-    assert!(!area.supports_offset(DisplayLine::new(24).unwrap()));
+    assert!(DiagonalScroll::new(area, DisplayLine::new(23).unwrap()).is_some());
+    assert!(DiagonalScroll::new(area, DisplayLine::new(24).unwrap()).is_none());
     assert!(
         VerticalScrollArea::<DisplaySize128x32>::new(
             RowCount::new(9).unwrap(),
@@ -416,8 +424,31 @@ fn flush_sets_address_window_then_sends_full_framebuffer() {
         i2c.writes[1].bytes,
         Vec::from([0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x03])
     );
+    // The whole 512-byte framebuffer goes out as one write after its control byte.
+    assert_eq!(i2c.writes[2].bytes.len(), 1 + 512);
     assert_eq!(i2c.writes[2].bytes[..3], [0x40, 0xAA, 0x55]);
-    assert_eq!(i2c.writes.len(), 34);
+    assert_eq!(i2c.writes.len(), 3);
+}
+
+#[test]
+fn flush_area_spanning_full_width_sends_one_contiguous_write() {
+    let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x64, Rotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.buffer_mut()[128] = 0x11;
+    display.buffer_mut()[3 * 128 - 1] = 0x22;
+
+    // Rows 8..24 cover pages 1 and 2 across every column.
+    display.flush_area(0, 8, 128, 16).unwrap();
+    let i2c = display.release();
+
+    assert_eq!(
+        i2c.writes[1].bytes,
+        Vec::from([0x00, 0x21, 0x00, 0x7F, 0x22, 0x01, 0x02])
+    );
+    assert_eq!(i2c.writes[2].bytes.len(), 1 + 2 * 128);
+    assert_eq!(i2c.writes[2].bytes[..2], [0x40, 0x11]);
+    assert_eq!(i2c.writes[2].bytes[2 * 128], 0x22);
+    assert_eq!(i2c.writes.len(), 3);
 }
 
 #[test]
@@ -525,8 +556,11 @@ fn configure_diagonal_scroll_stops_scroll_then_programs_sequence() {
             )
             .unwrap(),
             ScrollFrameInterval::Frames2,
-            VerticalScrollArea::<DisplaySize128x64>::whole_display(),
-            DisplayLine::<DisplaySize128x64>::new(1).unwrap(),
+            DiagonalScroll::new(
+                VerticalScrollArea::<DisplaySize128x64>::whole_display(),
+                DisplayLine::new(1).unwrap(),
+            )
+            .unwrap(),
         )
         .unwrap();
 
@@ -538,27 +572,6 @@ fn configure_diagonal_scroll_stops_scroll_then_programs_sequence() {
         i2c.writes[2].bytes,
         Vec::from([0x00, 0x29, 0x00, 0x00, 0x07, 0x07, 0x01])
     );
-}
-
-#[test]
-fn configure_diagonal_scroll_rejects_offset_outside_scroll_area() {
-    let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x64, Rotation::Rotate0);
-
-    let error = display
-        .configure_diagonal_scroll(
-            ScrollDirection::Right,
-            PageRange::whole_display(),
-            ScrollFrameInterval::Frames2,
-            VerticalScrollArea::new(RowCount::new(8).unwrap(), RowCount::new(8).unwrap()).unwrap(),
-            DisplayLine::new(8).unwrap(),
-        )
-        .unwrap_err();
-
-    assert_eq!(
-        error,
-        Error::InvalidArgument(InvalidArgument::VerticalScrollOffsetOutOfRange)
-    );
-    assert!(display.release().writes.is_empty());
 }
 
 #[test]
@@ -872,4 +885,111 @@ fn draw_target_updates_framebuffer_without_flushing() {
     assert_eq!(display.buffer()[2], 0x08);
     let i2c = display.release();
     assert!(i2c.writes.is_empty());
+}
+
+/// Compile-time check that the size-generic value types can be logged with defmt.
+#[cfg(feature = "defmt")]
+#[allow(dead_code)]
+fn size_generic_types_implement_defmt_format() {
+    fn assert_format<T: defmt::Format>() {}
+    assert_format::<Page<DisplaySize128x64>>();
+    assert_format::<PageRange<DisplaySize128x32>>();
+    assert_format::<DisplayLine<DisplaySize96x16>>();
+    assert_format::<RowCount<DisplaySize128x64>>();
+    assert_format::<VerticalScrollArea<DisplaySize128x64>>();
+    assert_format::<DiagonalScroll<DisplaySize128x64>>();
+}
+
+/// The blocking and async APIs are written out separately, so this runs the
+/// same call sequence through both and requires identical bus traffic.
+#[cfg(feature = "async")]
+#[test]
+fn blocking_and_async_apis_produce_identical_bus_traffic() {
+    let config = Config {
+        orientation: Orientation::ROTATE_180,
+        power_source: PowerSource::External,
+        contrast: 0x30,
+    };
+    let pages =
+        PageRange::<DisplaySize128x64>::new(Page::new(1).unwrap(), Page::new(6).unwrap()).unwrap();
+    let diagonal = DiagonalScroll::new(
+        VerticalScrollArea::new(RowCount::new(8).unwrap(), RowCount::new(48).unwrap()).unwrap(),
+        DisplayLine::new(3).unwrap(),
+    )
+    .unwrap();
+    let fill = |display: &mut Ssd1306<_, _, BufferedGraphicsMode<DisplaySize128x64>, _>| {
+        for (index, byte) in display.buffer_mut().iter_mut().enumerate() {
+            *byte = index as u8;
+        }
+    };
+
+    let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x64, Rotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.init_with_config(config).unwrap();
+    display.set_contrast(0x90).unwrap();
+    display.set_invert(true).unwrap();
+    display.set_entire_display_on(false).unwrap();
+    display.set_display_on(true).unwrap();
+    display
+        .set_display_start_line(DisplayLine::new(5).unwrap())
+        .unwrap();
+    display
+        .set_display_offset(DisplayOffset::new(2).unwrap())
+        .unwrap();
+    display.set_rotation(Rotation::Rotate0).unwrap();
+    fill(&mut display);
+    display.flush().unwrap();
+    display.flush_area(3, 5, 20, 12).unwrap();
+    display
+        .configure_horizontal_scroll(ScrollDirection::Left, pages, ScrollFrameInterval::Frames5)
+        .unwrap();
+    display
+        .configure_diagonal_scroll(
+            ScrollDirection::Right,
+            pages,
+            ScrollFrameInterval::Frames25,
+            diagonal,
+        )
+        .unwrap();
+    let display = display
+        .start_scroll()
+        .unwrap()
+        .stop_scroll()
+        .unwrap()
+        .restore_display()
+        .unwrap();
+    let blocking_i2c = display.release();
+
+    let mut display = Ssd1306::new(MockI2c::new(), DisplaySize128x64, Rotation::Rotate0)
+        .into_buffered_graphics_mode();
+    block_on(display.init_with_config_async(config)).unwrap();
+    block_on(display.set_contrast_async(0x90)).unwrap();
+    block_on(display.set_invert_async(true)).unwrap();
+    block_on(display.set_entire_display_on_async(false)).unwrap();
+    block_on(display.set_display_on_async(true)).unwrap();
+    block_on(display.set_display_start_line_async(DisplayLine::new(5).unwrap())).unwrap();
+    block_on(display.set_display_offset_async(DisplayOffset::new(2).unwrap())).unwrap();
+    block_on(display.set_rotation_async(Rotation::Rotate0)).unwrap();
+    fill(&mut display);
+    block_on(display.flush_async()).unwrap();
+    block_on(display.flush_area_async(3, 5, 20, 12)).unwrap();
+    block_on(display.configure_horizontal_scroll_async(
+        ScrollDirection::Left,
+        pages,
+        ScrollFrameInterval::Frames5,
+    ))
+    .unwrap();
+    block_on(display.configure_diagonal_scroll_async(
+        ScrollDirection::Right,
+        pages,
+        ScrollFrameInterval::Frames25,
+        diagonal,
+    ))
+    .unwrap();
+    let display = block_on(display.start_scroll_async()).unwrap();
+    let display = block_on(display.stop_scroll_async()).unwrap();
+    let display = block_on(display.restore_display_async()).unwrap();
+    let async_i2c = display.release();
+
+    assert_eq!(async_i2c.writes, blocking_i2c.writes);
 }

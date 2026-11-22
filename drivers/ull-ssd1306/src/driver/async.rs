@@ -2,15 +2,15 @@ use embedded_hal::digital::OutputPin;
 
 use crate::size::DisplaySize;
 use crate::types::{
-    Config, DisplayLine, DisplayOffset, Error, InitError, InvalidArgument, Orientation, PageRange,
+    Config, DiagonalScroll, DisplayLine, DisplayOffset, Error, InitError, Orientation, PageRange,
     Result, Rotation, ScrollDirection, ScrollFrameInterval, SegmentRemap, VerticalScrollArea,
 };
 
 use super::{
-    BufferedGraphicsMode, CHUNK_SIZE, CONTROL_COMMAND, CONTROL_DATA, ComScanDirection, DrawArea,
+    BufferedGraphicsMode, CONTROL_COMMAND, CONTROL_DATA, ComScanDirection, DrawArea,
     DriverStateChangeResult, RawMode, ScrollActive, ScrollInactive, ScrollRestoreRequired, Ssd1306,
-    StateChangeError, diagonal_scroll_setup, frame_packet, horizontal_scroll_setup, init_prefix,
-    init_suffix, map_init_error, orientation_commands, vertical_scroll_area_setup,
+    StateChangeError, diagonal_scroll_setup, horizontal_scroll_setup, init_prefix, init_suffix,
+    map_init_error, orientation_commands, vertical_scroll_area_setup,
 };
 
 #[cfg(feature = "async")]
@@ -139,24 +139,13 @@ where
         direction: ScrollDirection,
         pages: PageRange<SIZE>,
         interval: ScrollFrameInterval,
-        area: VerticalScrollArea<SIZE>,
-        vertical_offset: DisplayLine<SIZE>,
+        scroll: DiagonalScroll<SIZE>,
     ) -> Result<(), DI::Error> {
-        if !area.supports_offset(vertical_offset) {
-            return Err(Error::InvalidArgument(
-                InvalidArgument::VerticalScrollOffsetOutOfRange,
-            ));
-        }
-
         self.send_command_async(0x2E).await?;
-        self.set_vertical_scroll_area_inner_async(area).await?;
-        self.send_commands_async(&diagonal_scroll_setup(
-            direction,
-            pages,
-            interval,
-            vertical_offset,
-        ))
-        .await
+        self.set_vertical_scroll_area_inner_async(scroll.area())
+            .await?;
+        self.send_commands_async(&diagonal_scroll_setup(direction, pages, interval, scroll))
+            .await
     }
 
     /// Async version of [`Self::start_scroll`].
@@ -207,8 +196,8 @@ where
         let i2c = &mut self.i2c;
         let buffer = self.mode.buffer.as_ref();
 
-        if area.is_full::<SIZE>() {
-            return send_frame_async(i2c, address, CONTROL_DATA, buffer).await;
+        if let Some(range) = area.contiguous_range::<SIZE>() {
+            return send_frame_async(i2c, address, CONTROL_DATA, &buffer[range]).await;
         }
 
         let page_width = usize::from(SIZE::WIDTH);
@@ -392,12 +381,15 @@ where
         return Ok(());
     }
 
-    let mut packet = [0u8; CHUNK_SIZE + 1];
-
-    for chunk in bytes.chunks(CHUNK_SIZE) {
-        let frame = frame_packet(&mut packet, control, chunk);
-        i2c.write(address, frame).await.map_err(Error::Bus)?;
-    }
-
-    Ok(())
+    // Adjacent write operations go out back to back with no restart, so the
+    // control byte and payload form one I2C write without a copy.
+    i2c.transaction(
+        address,
+        &mut [
+            embedded_hal_async::i2c::Operation::Write(&[control]),
+            embedded_hal_async::i2c::Operation::Write(bytes),
+        ],
+    )
+    .await
+    .map_err(Error::Bus)
 }

@@ -11,8 +11,8 @@ pub use crate::driver::{
 };
 pub use crate::size::{DisplaySize, DisplaySize96x16, DisplaySize128x32, DisplaySize128x64};
 pub use crate::types::{
-    Address, ComScanDirection, Config, DisplayLine, DisplayOffset, Error, InitError,
-    InvalidArgument, Orientation, Page, PageRange, PowerSource, Result, Rotation, RowCount,
+    Address, ComScanDirection, Config, DiagonalScroll, DisplayLine, DisplayOffset, Error,
+    InitError, Orientation, Page, PageRange, PowerSource, Result, Rotation, RowCount,
     ScrollDirection, ScrollFrameInterval, SegmentRemap, VerticalScrollArea,
 };
 

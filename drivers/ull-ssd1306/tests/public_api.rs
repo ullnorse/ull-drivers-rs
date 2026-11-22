@@ -43,15 +43,19 @@ impl I2c<SevenBitAddress> for MockI2c {
         address: u8,
         operations: &mut [Operation<'_>],
     ) -> core::result::Result<(), Self::Error> {
+        // Adjacent writes in one transaction are one bus write (embedded-hal 1.0).
+
+        let mut bytes = Vec::new();
+
         for operation in operations {
             match operation {
                 Operation::Read(_) => return Err(MockI2cError),
-                Operation::Write(bytes) => self.writes.push(WriteFrame {
-                    address,
-                    bytes: bytes.to_vec(),
-                }),
+
+                Operation::Write(chunk) => bytes.extend_from_slice(chunk),
             }
         }
+
+        self.writes.push(WriteFrame { address, bytes });
 
         Ok(())
     }
@@ -64,15 +68,19 @@ impl embedded_hal_async::i2c::I2c<embedded_hal_async::i2c::SevenBitAddress> for 
         address: u8,
         operations: &mut [embedded_hal_async::i2c::Operation<'_>],
     ) -> core::result::Result<(), Self::Error> {
+        // Adjacent writes in one transaction are one bus write (embedded-hal 1.0).
+
+        let mut bytes = Vec::new();
+
         for operation in operations {
             match operation {
                 embedded_hal_async::i2c::Operation::Read(_) => return Err(MockI2cError),
-                embedded_hal_async::i2c::Operation::Write(bytes) => self.writes.push(WriteFrame {
-                    address,
-                    bytes: bytes.to_vec(),
-                }),
+
+                embedded_hal_async::i2c::Operation::Write(chunk) => bytes.extend_from_slice(chunk),
             }
         }
+
+        self.writes.push(WriteFrame { address, bytes });
 
         Ok(())
     }

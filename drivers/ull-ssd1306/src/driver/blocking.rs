@@ -4,15 +4,15 @@ use embedded_hal::i2c::{I2c, SevenBitAddress};
 
 use crate::size::DisplaySize;
 use crate::types::{
-    Config, DisplayLine, DisplayOffset, Error, InitError, InvalidArgument, Orientation, PageRange,
+    Config, DiagonalScroll, DisplayLine, DisplayOffset, Error, InitError, Orientation, PageRange,
     Result, Rotation, ScrollDirection, ScrollFrameInterval, SegmentRemap, VerticalScrollArea,
 };
 
 use super::{
-    BufferedGraphicsMode, CHUNK_SIZE, CONTROL_COMMAND, CONTROL_DATA, ComScanDirection, DrawArea,
+    BufferedGraphicsMode, CONTROL_COMMAND, CONTROL_DATA, ComScanDirection, DrawArea,
     DriverStateChangeResult, RawMode, ScrollActive, ScrollInactive, ScrollRestoreRequired, Ssd1306,
-    StateChangeError, diagonal_scroll_setup, frame_packet, horizontal_scroll_setup, init_prefix,
-    init_suffix, map_init_error, orientation_commands, vertical_scroll_area_setup,
+    StateChangeError, diagonal_scroll_setup, horizontal_scroll_setup, init_prefix, init_suffix,
+    map_init_error, orientation_commands, vertical_scroll_area_setup,
 };
 
 impl<DI, SIZE, MODE> Ssd1306<DI, SIZE, MODE, ScrollInactive>
@@ -131,23 +131,11 @@ where
         direction: ScrollDirection,
         pages: PageRange<SIZE>,
         interval: ScrollFrameInterval,
-        area: VerticalScrollArea<SIZE>,
-        vertical_offset: DisplayLine<SIZE>,
+        scroll: DiagonalScroll<SIZE>,
     ) -> Result<(), DI::Error> {
-        if !area.supports_offset(vertical_offset) {
-            return Err(Error::InvalidArgument(
-                InvalidArgument::VerticalScrollOffsetOutOfRange,
-            ));
-        }
-
         self.send_command(0x2E)?;
-        self.set_vertical_scroll_area_inner(area)?;
-        self.send_commands(&diagonal_scroll_setup(
-            direction,
-            pages,
-            interval,
-            vertical_offset,
-        ))
+        self.set_vertical_scroll_area_inner(scroll.area())?;
+        self.send_commands(&diagonal_scroll_setup(direction, pages, interval, scroll))
     }
 
     /// Activates the previously configured hardware scroll operation.
@@ -196,8 +184,8 @@ where
         let i2c = &mut self.i2c;
         let buffer = self.mode.buffer.as_ref();
 
-        if area.is_full::<SIZE>() {
-            return send_frame(i2c, address, CONTROL_DATA, buffer);
+        if let Some(range) = area.contiguous_range::<SIZE>() {
+            return send_frame(i2c, address, CONTROL_DATA, &buffer[range]);
         }
 
         let page_width = usize::from(SIZE::WIDTH);
@@ -357,12 +345,14 @@ where
         return Ok(());
     }
 
-    let mut packet = [0u8; CHUNK_SIZE + 1];
-
-    for chunk in bytes.chunks(CHUNK_SIZE) {
-        let frame = frame_packet(&mut packet, control, chunk);
-        i2c.write(address, frame).map_err(Error::Bus)?;
-    }
-
-    Ok(())
+    // Adjacent write operations go out back to back with no restart, so the
+    // control byte and payload form one I2C write without a copy.
+    i2c.transaction(
+        address,
+        &mut [
+            embedded_hal::i2c::Operation::Write(&[control]),
+            embedded_hal::i2c::Operation::Write(bytes),
+        ],
+    )
+    .map_err(Error::Bus)
 }

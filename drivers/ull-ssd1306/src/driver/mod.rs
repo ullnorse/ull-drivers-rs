@@ -10,14 +10,12 @@ use core::convert::Infallible;
 
 use crate::size::{DisplaySize, private};
 use crate::types::{
-    Address, ComScanDirection, Config, DisplayLine, Error, InitError, InvalidArgument, Orientation,
-    PageRange, PowerSource, Rotation, ScrollDirection, ScrollFrameInterval, SegmentRemap,
-    VerticalScrollArea,
+    Address, ComScanDirection, Config, DiagonalScroll, Error, InitError, Orientation, PageRange,
+    PowerSource, Rotation, ScrollDirection, ScrollFrameInterval, SegmentRemap, VerticalScrollArea,
 };
 
 const CONTROL_COMMAND: u8 = 0x00;
 const CONTROL_DATA: u8 = 0x40;
-const CHUNK_SIZE: usize = 16;
 
 /// Error returned when a scroll state transition fails.
 #[derive(Debug)]
@@ -364,19 +362,19 @@ impl DrawArea {
         )
     }
 
-    fn is_full<SIZE>(self) -> bool
+    /// Byte range of the framebuffer when the area spans whole pages, so it
+    /// is one contiguous slice in page order.
+    fn contiguous_range<SIZE>(self) -> Option<core::ops::Range<usize>>
     where
         SIZE: DisplaySize,
     {
-        self == Self::full::<SIZE>()
-    }
-}
+        let width = usize::from(SIZE::WIDTH);
+        if self.start_column != 0 || usize::from(self.end_column) + 1 != width {
+            return None;
+        }
 
-fn frame_packet<'a>(packet: &'a mut [u8; CHUNK_SIZE + 1], control: u8, chunk: &[u8]) -> &'a [u8] {
-    packet[0] = control;
-    let len = chunk.len();
-    packet[1..1 + len].copy_from_slice(chunk);
-    &packet[..1 + len]
+        Some(usize::from(self.start_page) * width..(usize::from(self.end_page) + 1) * width)
+    }
 }
 
 fn init_prefix<SIZE>(config: Config) -> [u8; 12]
@@ -518,7 +516,7 @@ fn diagonal_scroll_setup<SIZE>(
     direction: ScrollDirection,
     pages: PageRange<SIZE>,
     interval: ScrollFrameInterval,
-    vertical_offset: DisplayLine<SIZE>,
+    scroll: DiagonalScroll<SIZE>,
 ) -> [u8; 6]
 where
     SIZE: DisplaySize,
@@ -529,17 +527,13 @@ where
         pages.start().as_u8(),
         scroll_interval_bits(interval),
         pages.end().as_u8(),
-        vertical_offset.as_u8(),
+        scroll.vertical_offset().as_u8(),
     ]
 }
 
 fn map_init_error<BusError, PinError>(error: Error<BusError>) -> InitError<BusError, PinError> {
-    match error {
-        Error::Bus(bus) => InitError::Bus(bus),
-        Error::InvalidArgument(InvalidArgument::VerticalScrollOffsetOutOfRange) => {
-            unreachable!("init does not validate scroll arguments")
-        }
-    }
+    let Error::Bus(bus) = error;
+    InitError::Bus(bus)
 }
 
 #[cfg(feature = "graphics")]
