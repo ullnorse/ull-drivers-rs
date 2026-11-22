@@ -647,3 +647,100 @@ fn assert_send<T: Send>() {}
 fn driver_is_send_when_i2c_is_send() {
     assert_send::<Sht3x<MockI2c>>();
 }
+
+/// Bytes a 16-bit word occupies on the bus: big-endian word plus its CRC.
+#[cfg(feature = "async")]
+fn word_bytes(word: u16) -> Vec<u8> {
+    let [msb, lsb] = word.to_be_bytes();
+    Vec::from([msb, lsb, crc8([msb, lsb])])
+}
+
+/// The blocking and async APIs are written out separately, so this runs the
+/// same call sequence through both and requires identical bus traffic and delays.
+#[cfg(feature = "async")]
+#[test]
+fn blocking_and_async_apis_produce_identical_bus_traffic() {
+    fn reads() -> Vec<Vec<u8>> {
+        Vec::from([
+            word_bytes(0x8010),
+            measurement_bytes(0x6666, 0x8000),
+            word_bytes(0x5555),
+            measurement_bytes(0x1234, 0x4321),
+            measurement_bytes(0x1111, 0x2222),
+            measurement_bytes(0x3333, 0x4444),
+        ])
+    }
+
+    let mut delay = MockDelay::default();
+    let mut sensor = Sht3x::new(MockI2c::new(reads()));
+    sensor.soft_reset(&mut delay).unwrap();
+    sensor.clear_status_and_wait(&mut delay).unwrap();
+    sensor.set_heater_and_wait(&mut delay, true).unwrap();
+    let status = sensor.status().unwrap();
+    let measurement = sensor.measure_raw(&mut delay, Repeatability::High).unwrap();
+    let temperature = sensor
+        .measure_temperature_raw(&mut delay, Repeatability::Low)
+        .unwrap();
+    let stretched = sensor
+        .measure_raw_with_clock_stretching(Repeatability::Medium)
+        .unwrap();
+    let mut periodic = sensor
+        .start_periodic_and_wait(&mut delay, Repeatability::Medium, PeriodicRate::Mps2)
+        .unwrap();
+    let periodic_sample = periodic.fetch_raw().unwrap();
+    let mut art = periodic
+        .stop_periodic(&mut delay)
+        .unwrap()
+        .start_art_and_wait(&mut delay)
+        .unwrap();
+    let art_sample = art.fetch_raw().unwrap();
+    let mut sensor = art.stop_periodic(&mut delay).unwrap();
+    sensor.general_call_reset(&mut delay).unwrap();
+    let blocking_i2c = sensor.release();
+
+    let mut async_delay = MockAsyncDelay::default();
+    let mut sensor = Sht3x::new(MockI2c::new(reads()));
+    block_on(sensor.soft_reset_async(&mut async_delay)).unwrap();
+    block_on(sensor.clear_status_and_wait_async(&mut async_delay)).unwrap();
+    block_on(sensor.set_heater_and_wait_async(&mut async_delay, true)).unwrap();
+    assert_eq!(block_on(sensor.status_async()).unwrap(), status);
+    assert_eq!(
+        block_on(sensor.measure_raw_async(&mut async_delay, Repeatability::High)).unwrap(),
+        measurement
+    );
+    assert_eq!(
+        block_on(sensor.measure_temperature_raw_async(&mut async_delay, Repeatability::Low))
+            .unwrap(),
+        temperature
+    );
+    assert_eq!(
+        block_on(sensor.measure_raw_with_clock_stretching_async(Repeatability::Medium)).unwrap(),
+        stretched
+    );
+    let mut periodic = block_on(sensor.start_periodic_and_wait_async(
+        &mut async_delay,
+        Repeatability::Medium,
+        PeriodicRate::Mps2,
+    ))
+    .unwrap();
+    assert_eq!(
+        block_on(periodic.fetch_raw_async()).unwrap(),
+        periodic_sample
+    );
+    let sensor = block_on(periodic.stop_periodic_async(&mut async_delay)).unwrap();
+    let mut art = block_on(sensor.start_art_and_wait_async(&mut async_delay)).unwrap();
+    assert_eq!(block_on(art.fetch_raw_async()).unwrap(), art_sample);
+    let mut sensor = block_on(art.stop_periodic_async(&mut async_delay)).unwrap();
+    block_on(sensor.general_call_reset_async(&mut async_delay)).unwrap();
+    let async_i2c = sensor.release();
+
+    let traffic = |i2c: &MockI2c| -> Vec<(u8, Vec<u8>)> {
+        i2c.writes
+            .iter()
+            .map(|write| (write.address, write.bytes.clone()))
+            .collect()
+    };
+    assert_eq!(traffic(&async_i2c), traffic(&blocking_i2c));
+    assert_eq!(async_delay.delayed_ms, delay.delayed_ms);
+    assert!(blocking_i2c.reads.is_empty() && async_i2c.reads.is_empty());
+}
