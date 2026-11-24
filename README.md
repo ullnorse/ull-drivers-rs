@@ -23,6 +23,7 @@ behavior makes sense.
 ull-drivers-rs/
 ├── drivers/
 │   ├── ull-bmp580/
+│   ├── ull-lis2dw12/
 │   ├── ull-max17048/
 │   ├── ull-sht3x/
 │   ├── ull-sht4x/
@@ -37,6 +38,7 @@ ull-drivers-rs/
 
 - `drivers/ull-bmp580`: `embedded-hal` 1.0 I2C driver for the Bosch BMP580 pressure and temperature sensor.
 - `drivers/ull-max17048`: `embedded-hal` 1.0 I2C driver for the Maxim MAX17048 single-cell fuel gauge.
+- `drivers/ull-lis2dw12`: `embedded-hal` 1.0 I2C driver for the ST LIS2DW12 accelerometer.
 - `drivers/ull-sht3x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT3x-DIS humidity and temperature sensors.
 - `drivers/ull-sht4x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT4x (SHT40) humidity and temperature sensors.
 - `drivers/ull-ssd1306`: `embedded-hal` 1.0 SSD1306 display driver with optional `embedded-graphics-core` support.

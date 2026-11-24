@@ -158,6 +158,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ull-lis2dw12"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "embedded-hal",
+ "embedded-hal-async",
+]
+
+[[package]]
 name = "ull-max17048"
 version = "0.1.0"
 dependencies = [
