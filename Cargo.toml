@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["drivers/ull-sht3x", "drivers/ull-max17048", "drivers/ull-sht4x", "drivers/ull-ssd1306"]
+members = ["drivers/ull-sht3x", "drivers/ull-bmp580", "drivers/ull-max17048", "drivers/ull-sht4x", "drivers/ull-ssd1306"]
 
 [workspace.package]
 edition = "2024"

@@ -149,6 +149,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ull-bmp580"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "embedded-hal",
+ "embedded-hal-async",
+]
+
+[[package]]
 name = "ull-max17048"
 version = "0.1.0"
 dependencies = [
