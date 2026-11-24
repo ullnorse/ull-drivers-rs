@@ -158,6 +158,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ull-sht4x"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "embedded-hal",
+ "embedded-hal-async",
+]
+
+[[package]]
 name = "ull-ssd1306"
 version = "0.1.0"
 dependencies = [

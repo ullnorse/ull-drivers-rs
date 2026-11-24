@@ -23,6 +23,7 @@ behavior makes sense.
 ull-drivers-rs/
 ├── drivers/
 │   ├── ull-sht3x/
+│   ├── ull-sht4x/
 │   └── ull-ssd1306/
 ├── docs/
 │   └── driver-style.md
@@ -33,6 +34,7 @@ ull-drivers-rs/
 ## Crates
 
 - `drivers/ull-sht3x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT3x-DIS humidity and temperature sensors.
+- `drivers/ull-sht4x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT4x (SHT40) humidity and temperature sensors.
 - `drivers/ull-ssd1306`: `embedded-hal` 1.0 SSD1306 display driver with optional `embedded-graphics-core` support.
 
 ## Notes
