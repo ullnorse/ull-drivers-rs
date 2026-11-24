@@ -27,7 +27,8 @@ ull-drivers-rs/
 │   ├── ull-max17048/
 │   ├── ull-sht3x/
 │   ├── ull-sht4x/
-│   └── ull-ssd1306/
+│   ├── ull-ssd1306/
+│   └── ull-ssd1681/
 ├── docs/
 │   └── driver-style.md
 ├── Cargo.toml
@@ -42,6 +43,7 @@ ull-drivers-rs/
 - `drivers/ull-sht3x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT3x-DIS humidity and temperature sensors.
 - `drivers/ull-sht4x`: `embedded-hal` 1.0 I2C driver for Sensirion SHT4x (SHT40) humidity and temperature sensors.
 - `drivers/ull-ssd1306`: `embedded-hal` 1.0 SSD1306 display driver with optional `embedded-graphics-core` support.
+- `drivers/ull-ssd1681`: `embedded-hal` 1.0 SPI driver for the SSD1681 e-paper controller on the Good Display GDEY0154D67 (200x200 black/white) panel.
 
 ## Notes
 
